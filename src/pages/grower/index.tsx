@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   Truck,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Navbar from "@/components/layout/Navbar";
@@ -30,12 +29,14 @@ const JoinAsGrower = () => {
             build a sustainable business with our innovative platform.
           </p>
           <div className="mt-8">
-            <Button
-              className="bg-green-700 hover:bg-green-800 text-white px-8 py-6 text-lg"
-              size="lg"
-            >
-              Apply to Join
-            </Button>
+            <Link to="/signup">
+              <Button
+                className="bg-green-700 hover:bg-green-800 text-white px-8 py-6 text-lg"
+                size="lg"
+              >
+                Apply to Join
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -319,12 +320,14 @@ const JoinAsGrower = () => {
             platform. Applications are currently open for the summer growing
             season.
           </p>
-          <Button
-            className="bg-green-700 hover:bg-green-800 text-white px-8 py-6 text-lg"
-            size="lg"
-          >
-            Apply to Join Today
-          </Button>
+          <Link to="/signup">
+            <Button
+              className="bg-green-700 hover:bg-green-800 text-white px-8 py-6 text-lg"
+              size="lg"
+            >
+              Apply to Join Today
+            </Button>
+          </Link>
         </div>
       </main>
 

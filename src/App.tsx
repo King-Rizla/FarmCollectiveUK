@@ -1,3 +1,4 @@
+
 import { Suspense, lazy } from "react";
 import { useRoutes, Routes, Route } from "react-router-dom";
 import Home from "./components/home";
@@ -15,6 +16,9 @@ const ConsumerProfile = lazy(() => import("./pages/profile/consumer"));
 const ProducerProfile = lazy(() => import("./pages/profile/producer"));
 const Cart = lazy(() => import("./pages/cart"));
 const Checkout = lazy(() => import("./pages/checkout"));
+const SignInPage = lazy(() => import("./pages/signin"));
+const SignUpPage = lazy(() => import("./pages/signup"));
+const ProfilePage = lazy(() => import("./pages/profile"));
 
 // Loading component for Suspense fallback
 const Loading = () => (
@@ -86,6 +90,14 @@ function App() {
           }
         />
         <Route
+          path="/profile"
+          element={
+            <Suspense fallback={<Loading />}>
+              <ProfilePage />
+            </Suspense>
+          }
+        />
+        <Route
           path="/profile/consumer"
           element={
             <Suspense fallback={<Loading />}>
@@ -114,6 +126,22 @@ function App() {
           element={
             <Suspense fallback={<Loading />}>
               <Checkout />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/signin"
+          element={
+            <Suspense fallback={<Loading />}>
+              <SignInPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <Suspense fallback={<Loading />}>
+              <SignUpPage />
             </Suspense>
           }
         />

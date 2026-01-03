@@ -1,22 +1,21 @@
-import React from "react";
-import HeroSection from "./home/HeroSection";
-import FeaturesPreview from "./home/FeaturesPreview";
-import ProducersCarousel from "./home/ProducersCarousel";
-import TestimonialsSection from "./home/TestimonialsSection";
-import Navbar from "./layout/Navbar";
-import Footer from "./layout/Footer";
+import React from 'react';
+import Navbar from "@/components/layout/Navbar";
+import HeroSection from "@/components/home/HeroSection";
+import FeaturesPreview from "@/components/home/FeaturesPreview";
+import ProducersCarousel from "@/components/home/ProducersCarousel";
+import TestimonialsSection from "@/components/home/TestimonialsSection";
+import Footer from "@/components/layout/Footer";
 
 const Home = () => {
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-amber-50 min-h-screen">
       <Navbar />
-      <div className="pt-20">
-        {/* Add padding to account for fixed navbar */}
+      <main>
         <HeroSection />
         <FeaturesPreview />
         <ProducersCarousel />
         <TestimonialsSection />
-      </div>
+      </main>
       <Footer />
     </div>
   );

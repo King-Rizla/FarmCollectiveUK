@@ -30,7 +30,7 @@ const HeroSection = ({
     },
     secondary: {
       text: "Join as a Grower",
-      href: "/grower",
+      href: "/signup",
     },
   },
 }: HeroSectionProps) => {
