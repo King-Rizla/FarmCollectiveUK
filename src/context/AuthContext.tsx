@@ -1,19 +1,23 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as authSignOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, User } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  signOut as authSignOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  User,
+} from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 
-// Define the shape of the user profile
 interface UserProfile {
   email: string;
   full_name?: string;
   avatar_url?: string;
   isProducer?: boolean;
-  // Add other profile fields as necessary
 }
 
-// Define the shape of the context value
 interface AuthContextType {
   session: User | null;
   profile: UserProfile | null;
@@ -26,10 +30,8 @@ interface AuthContextType {
   activateProducerProfile: () => Promise<void>;
 }
 
-// Create the context with a default undefined value
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Define the props for the AuthProvider
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -42,66 +44,94 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setSession(user);
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const userProfile = userDoc.data() as UserProfile;
-          setProfile(userProfile);
-          setIsProducer(userProfile.isProducer || false);
+      try {
+        if (user) {
+          setSession(user);
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            const userProfile = userDoc.data() as UserProfile;
+            setProfile(userProfile);
+            setIsProducer(userProfile.isProducer || false);
+          } else {
+            // Fallback: If auth exists but firestore doc doesn't (yet), creates it.
+            const userProfile: UserProfile = { 
+              email: user.email!,
+              full_name: user.displayName || 'User',
+              avatar_url: user.photoURL || '',
+              isProducer: false
+            };
+            await setDoc(userDocRef, userProfile);
+            setProfile(userProfile);
+            setIsProducer(false);
+          }
         } else {
-          // Handle case where user exists in auth but not in firestore
-          const userProfile: UserProfile = { 
-            email: user.email!,
-            full_name: user.displayName,
-            avatar_url: user.photoURL,
-            isProducer: false
-          };
-          await setDoc(userDocRef, userProfile);
-          setProfile(userProfile);
+          setSession(null);
+          setProfile(null);
           setIsProducer(false);
         }
-      } else {
-        setSession(null);
-        setProfile(null);
-        setIsProducer(false);
+      } catch (error) {
+        console.error("Auth State Change Error:", error);
+        // Optional: Set an error state here if you have one
+      } finally {
+        setLoading(false); // <--- CRITICAL: This must ALWAYS run
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    setLoading(true);
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
-    const userProfile: UserProfile = {
+    const newUserProfile: UserProfile = {
       email: user.email!,
-      isProducer: false, // Default value for new users
+      isProducer: false,
     };
-    await setDoc(doc(db, 'users', user.uid), userProfile);
+    await setDoc(doc(db, 'users', user.uid), newUserProfile);
+    // Manually set state after creation
+    setProfile(newUserProfile);
     setSession(user);
-    setProfile(userProfile);
     setIsProducer(false);
-    setLoading(false);
   };
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true);
     await signInWithEmailAndPassword(auth, email, password);
-    // onAuthStateChanged will handle setting session and profile
+    // onAuthStateChanged will handle loading the user data
   };
 
   const signInWithGoogle = async () => {
-    setLoading(true);
-    await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged will handle setting session and profile
+    // Note: We DO NOT set loading(true) here to avoid unmounting the UI
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Explicitly check/create profile immediately to ensure data exists before redirect
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        const userProfile: UserProfile = { 
+          email: user.email!,
+          full_name: user.displayName || "User",
+          avatar_url: user.photoURL || "",
+          isProducer: false
+        };
+        await setDoc(userDocRef, userProfile);
+        setProfile(userProfile);
+      }
+      // Session will be updated by the listener, but we can set it here too for responsiveness
+      setSession(user);
+    } catch (error) {
+      console.error("Google Sign In Error:", error);
+      throw error;
+    }
   };
 
   const signOut = async () => {
     await authSignOut(auth);
+    // Clear state manually for instant UI feedback
     setSession(null);
     setProfile(null);
     setIsProducer(false);
@@ -111,7 +141,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!session) throw new Error("No user is logged in.");
     const userDocRef = doc(db, 'users', session.uid);
     await updateDoc(userDocRef, { isProducer: true });
-    if(profile){
+    if (profile) {
       const updatedProfile = { ...profile, isProducer: true };
       setProfile(updatedProfile);
       setIsProducer(true);
@@ -130,14 +160,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     activateProducerProfile,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom hook to use the auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

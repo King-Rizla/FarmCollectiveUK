@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 export default function Cart() {
   // Mock cart items
@@ -127,9 +128,11 @@ export default function Cart() {
             <Card className="text-center p-12">
               <CardContent>
                 <p className="text-xl mb-4">Your cart is empty</p>
-                <Button className="bg-green-700 hover:bg-green-800">
-                  Browse Marketplace
-                </Button>
+                <Link to="/marketplace">
+                  <Button className="bg-green-700 hover:bg-green-800">
+                    Browse Marketplace
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           )}

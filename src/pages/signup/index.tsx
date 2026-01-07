@@ -1,43 +1,42 @@
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { useSignUp } from "@/hooks/useSignUp";
 
 const SignUpPage = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { signUp, signInWithGoogle } = useAuth();
-  const navigate = useNavigate();
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    error,
+    loading,
+    handleSignUp,
+    handleGoogleSignIn,
+  } = useSignUp();
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      await signUp(email, password);
-      navigate("/profile");
-    } catch (error: any) {
-      setError(error.message);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    try {
-      await signInWithGoogle();
-      navigate("/profile");
-    } catch (error: any) {
-      setError(error.message);
-    }
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-md mb-4">
+        <Link to="/">
+          <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-amber-600 text-green-800">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Home
+          </Button>
+        </Link>
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign Up</CardTitle>
@@ -70,7 +69,7 @@ const SignUpPage = () => {
               <Button type="submit" className="w-full">Sign Up</Button>
             </div>
           </form>
-          <div className="relative my-4">
+          {/* <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />
             </div>
@@ -80,7 +79,7 @@ const SignUpPage = () => {
               </span>
             </div>
           </div>
-          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn}>Sign Up with Google</Button>
+          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn}>Sign Up with Google</Button> */}
           <div className="mt-4 text-center text-sm">
             Already have an account?{" "}
             <Link to="/signin" className="underline">

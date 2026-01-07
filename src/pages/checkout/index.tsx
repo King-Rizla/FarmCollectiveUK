@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -13,41 +13,44 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
+// Mock cart items (moved outside the component)
+const cartItems = [
+  {
+    id: 1,
+    name: "Organic Carrots",
+    producer: "Green Valley Farm",
+    price: 2.99,
+    quantity: 2,
+  },
+  {
+    id: 2,
+    name: "Free Range Eggs",
+    producer: "Happy Hens",
+    price: 3.5,
+    quantity: 1,
+  },
+  {
+    id: 3,
+    name: "Artisan Sourdough Bread",
+    producer: "Village Bakery",
+    price: 4.25,
+    quantity: 1,
+  },
+];
+
 export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState("card");
 
-  // Mock cart items
-  const cartItems = [
-    {
-      id: 1,
-      name: "Organic Carrots",
-      producer: "Green Valley Farm",
-      price: 2.99,
-      quantity: 2,
-    },
-    {
-      id: 2,
-      name: "Free Range Eggs",
-      producer: "Happy Hens",
-      price: 3.5,
-      quantity: 1,
-    },
-    {
-      id: 3,
-      name: "Artisan Sourdough Bread",
-      producer: "Village Bakery",
-      price: 4.25,
-      quantity: 1,
-    },
-  ];
-
-  // Calculate totals
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
-  const shipping = 3.99;
-  const total = subtotal + shipping;
+  // Calculate totals using useMemo for optimization
+  const { subtotal, shipping, total } = useMemo(() => {
+    const subtotal = cartItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    const shipping = 3.99;
+    const total = subtotal + shipping;
+    return { subtotal, shipping, total };
+  }, [cartItems]); // Dependency array ensures this only recalculates if cartItems changes
 
   return (
     <div className="container mx-auto py-12 px-4 md:px-6">

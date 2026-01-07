@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
   ShoppingBasket,
@@ -20,23 +20,42 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
-const Navbar = () => {
+// Define the props for the Navbar component
+interface NavbarProps {
+  isLoggedIn?: boolean;
+  username?: string;
+  avatarUrl?: string;
+}
+
+const Navbar: React.FC<NavbarProps> = ({ 
+  isLoggedIn: isLoggedInProp, 
+  username: usernameProp, 
+  avatarUrl: avatarUrlProp 
+}) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const location = useLocation();
   const { session, profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
   const isActive = (path: string) => location.pathname === path;
 
   const cartCount = 3; // Simulated
-  const isLoggedIn = session !== null;
-  const username = profile?.full_name || "User";
-  const avatarUrl = profile?.avatar_url || "";
+  
+  // Use props if provided, otherwise fall back to context
+  const isLoggedIn = isLoggedInProp !== undefined ? isLoggedInProp : session !== null;
+  const username = usernameProp !== undefined ? usernameProp : profile?.full_name || "User";
+  const avatarUrl = avatarUrlProp !== undefined ? avatarUrlProp : profile?.avatar_url || "";
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-amber-100 shadow-sm">
@@ -89,7 +108,7 @@ const Navbar = () => {
                   <DropdownMenuItem asChild><Link to="/rewards" className="w-full flex items-center"><Coins className="mr-2 h-4 w-4" /> Tokens (520)</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/settings" className="w-full flex items-center"><Settings className="mr-2 h-4 w-4" /> Settings</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={signOut}><LogOut className="mr-2 h-4 w-4" /> Logout</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" /> Logout</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -125,7 +144,7 @@ const Navbar = () => {
               <Link to="/profile/producer" className="block py-2 text-green-800 hover:text-amber-600">Producer Profile</Link>
               <Link to="/orders" className="block py-2 text-green-800 hover:text-amber-600">Orders</Link>
               <Link to="/settings" className="block py-2 text-green-800 hover:text-amber-600">Settings</Link>
-              <div onClick={signOut} className="block py-2 text-green-800 hover:text-amber-600 cursor-pointer">Logout</div>
+              <div onClick={handleSignOut} className="block py-2 text-green-800 hover:text-amber-600 cursor-pointer">Logout</div>
             </div>
           ) : (
             <div className="pt-4 border-t border-amber-100 space-y-3">

@@ -1,8 +1,9 @@
 
 import { Suspense, lazy } from "react";
 import { useRoutes, Routes, Route } from "react-router-dom";
-import Home from "./components/home";
+import Home from "./pages/home";
 import routes from "tempo-routes";
+import { AuthProvider } from "./context/AuthContext";
 
 // Lazy load pages for better performance
 const Marketplace = lazy(() => import("./pages/marketplace"));
@@ -19,6 +20,7 @@ const Checkout = lazy(() => import("./pages/checkout"));
 const SignInPage = lazy(() => import("./pages/signin"));
 const SignUpPage = lazy(() => import("./pages/signup"));
 const ProfilePage = lazy(() => import("./pages/profile"));
+const NotFound = lazy(() => import("./pages/404"));
 
 // Loading component for Suspense fallback
 const Loading = () => (
@@ -29,7 +31,7 @@ const Loading = () => (
 
 function App() {
   return (
-    <>
+    <AuthProvider>
       {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
       <Routes>
         <Route path="/" element={<Home />} />
@@ -145,8 +147,16 @@ function App() {
             </Suspense>
           }
         />
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={<Loading />}>
+              <NotFound />
+            </Suspense>
+          }
+        />
       </Routes>
-    </>
+    </AuthProvider>
   );
 }
 

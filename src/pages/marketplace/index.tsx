@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { MapPin, Star, Filter, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
-// Dummy product data
+// --- DATA (Moved outside component) ---
 const products = [
   {
     id: "1",
@@ -226,8 +227,6 @@ const products = [
     category: "dairy",
   },
 ];
-
-// Categories for filtering
 const categories = [
   { value: "all", label: "All Products" },
   { value: "vegetables", label: "Vegetables" },
@@ -239,6 +238,87 @@ const categories = [
   { value: "specialty", label: "Specialty" },
 ];
 
+// --- HOOK (Business Logic) ---
+const useMarketplaceLogic = () => {
+  const [maxDistance, setMaxDistance] = useState(50);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showTokenDeals, setShowTokenDeals] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesDistance = product.distance <= maxDistance;
+      const matchesCategory =
+        selectedCategory === "all" || product.category === selectedCategory;
+      const matchesSearch =
+        searchQuery === "" ||
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.producer.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesDistance && matchesCategory && matchesSearch;
+    });
+  }, [maxDistance, selectedCategory, searchQuery]);
+
+  const handleProductClick = (product) => {
+    setSelectedProduct(product);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedProduct(null);
+  };
+
+  const handleAddToCart = (product, quantity) => {
+    const existingItemIndex = cart.findIndex(
+      (item) => item.product.id === product.id
+    );
+
+    if (existingItemIndex >= 0) {
+      const updatedCart = [...cart];
+      updatedCart[existingItemIndex].quantity += quantity;
+      setCart(updatedCart);
+    } else {
+      setCart([...cart, { product, quantity }]);
+    }
+
+    setIsModalOpen(false);
+    // You could add a toast notification here
+  };
+  
+  const resetFilters = () => {
+    setMaxDistance(50);
+    setSelectedCategory("all");
+    setSearchQuery("");
+  };
+
+  return {
+    // State
+    maxDistance,
+    selectedCategory,
+    showTokenDeals,
+    selectedProduct,
+    isModalOpen,
+    searchQuery,
+    filteredProducts,
+    
+    // State Setters
+    setMaxDistance,
+    setSelectedCategory,
+    setShowTokenDeals,
+    setSearchQuery,
+    
+    // Handlers
+    handleProductClick,
+    handleCloseModal,
+    handleAddToCart,
+    resetFilters,
+  };
+};
+
+// --- UI COMPONENTS ---
 const ProductCard = ({ product, onClick }) => {
   return (
     <Card className="h-full overflow-hidden border border-green-100 bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
@@ -302,22 +382,31 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
   const decrementQuantity = () => {
     if (quantity > 1) setQuantity(quantity - 1);
   };
+  
+  // Reset quantity when modal opens for a new product
+  React.useEffect(() => {
+    if (isOpen) {
+      setQuantity(1);
+    }
+  }, [isOpen]);
+
+  if (!product) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] bg-white">
         <DialogHeader>
           <DialogTitle className="text-2xl font-serif text-green-800">
-            {product?.name}
+            {product.name}
           </DialogTitle>
           <DialogDescription className="flex items-center text-green-700">
             <span className="flex items-center mr-4">
               <Star className="h-4 w-4 text-amber-500 fill-current mr-1" />
-              {product?.producer.rating}
+              {product.producer.rating}
             </span>
             <span className="flex items-center">
               <MapPin className="h-4 w-4 text-green-600 mr-1" />
-              {product?.distance} km away
+              {product.distance} km away
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -325,8 +414,8 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="aspect-square overflow-hidden rounded-md bg-green-50">
             <img
-              src={product?.image}
-              alt={product?.name}
+              src={product.image}
+              alt={product.name}
               className="object-cover w-full h-full"
             />
           </div>
@@ -334,9 +423,9 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
           <div className="flex flex-col">
             <div className="mb-4">
               <p className="text-2xl font-medium text-green-800 mb-2">
-                £{product?.price.toFixed(2)}{" "}
+                £{product.price.toFixed(2)}{" "}
                 <span className="text-sm text-green-600">
-                  / {product?.unit}
+                  / {product.unit}
                 </span>
               </p>
 
@@ -364,17 +453,17 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                 >
                   +
                 </Button>
-                <span className="ml-2 text-green-700">{product?.unit}</span>
+                <span className="ml-2 text-green-700">{product.unit}</span>
               </div>
 
               <div className="flex items-center mb-4">
                 <img
-                  src={product?.producer.image}
-                  alt={product?.producer.name}
+                  src={product.producer.image}
+                  alt={product.producer.name}
                   className="w-8 h-8 rounded-full mr-2"
                 />
                 <span className="text-green-800">
-                  From {product?.producer.name}
+                  From {product.producer.name}
                 </span>
               </div>
             </div>
@@ -385,7 +474,7 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                 <TabsTrigger value="reviews">Reviews</TabsTrigger>
               </TabsList>
               <TabsContent value="description" className="mt-4">
-                <p className="text-green-800">{product?.description}</p>
+                <p className="text-green-800">{product.description}</p>
                 <div className="mt-4 p-3 bg-amber-50 rounded-md border border-amber-100">
                   <p className="text-sm text-amber-800">
                     <span className="font-medium">$FCUK Token Rewards:</span>{" "}
@@ -398,11 +487,9 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                   <div className="p-3 border border-green-100 rounded-md">
                     <div className="flex items-center mb-2">
                       <div className="flex items-center text-amber-500 mr-2">
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
+                        {[...Array(5)].map((_, i) => (
+                           <Star key={i} className="h-4 w-4 fill-current" />
+                        ))}
                       </div>
                       <span className="font-medium text-green-800">
                         Sarah J.
@@ -421,11 +508,10 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                   <div className="p-3 border border-green-100 rounded-md">
                     <div className="flex items-center mb-2">
                       <div className="flex items-center text-amber-500 mr-2">
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current" />
-                        <Star className="h-4 w-4 fill-current opacity-30" />
+                         {[...Array(4)].map((_, i) => (
+                           <Star key={i} className="h-4 w-4 fill-current" />
+                        ))}
+                         <Star className="h-4 w-4 fill-current opacity-30" />
                       </div>
                       <span className="font-medium text-green-800">
                         Mark T.
@@ -450,7 +536,7 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                 size="lg"
               >
                 <ShoppingBag className="h-5 w-5 mr-2" />
-                Add to Cart - £{(product?.price * quantity).toFixed(2)}
+                Add to Cart - £{(product.price * quantity).toFixed(2)}
               </Button>
             </div>
           </div>
@@ -460,53 +546,25 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
   );
 };
 
+// --- MAIN COMPONENT (View Layer) ---
 const Marketplace = () => {
-  const [maxDistance, setMaxDistance] = useState(50);
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [showTokenDeals, setShowTokenDeals] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [cart, setCart] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // Filter products based on distance, category, and search query
-  const filteredProducts = products.filter((product) => {
-    const matchesDistance = product.distance <= maxDistance;
-    const matchesCategory =
-      selectedCategory === "all" || product.category === selectedCategory;
-    const matchesSearch =
-      searchQuery === "" ||
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.producer.name.toLowerCase().includes(searchQuery.toLowerCase());
-
-    return matchesDistance && matchesCategory && matchesSearch;
-  });
-
-  const handleProductClick = (product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-  };
-
-  const handleAddToCart = (product, quantity) => {
-    const existingItemIndex = cart.findIndex(
-      (item) => item.product.id === product.id,
-    );
-
-    if (existingItemIndex >= 0) {
-      const updatedCart = [...cart];
-      updatedCart[existingItemIndex].quantity += quantity;
-      setCart(updatedCart);
-    } else {
-      setCart([...cart, { product, quantity }]);
-    }
-
-    setIsModalOpen(false);
-    // Show toast notification here if you have a toast component
-  };
+  const {
+    maxDistance,
+    selectedCategory,
+    showTokenDeals,
+    selectedProduct,
+    isModalOpen,
+    searchQuery,
+    filteredProducts,
+    setMaxDistance,
+    setSelectedCategory,
+    setShowTokenDeals,
+    setSearchQuery,
+    handleProductClick,
+    handleCloseModal,
+    handleAddToCart,
+    resetFilters,
+  } = useMarketplaceLogic();
 
   return (
     <div className="bg-white min-h-screen">
@@ -578,7 +636,7 @@ const Marketplace = () => {
                   onChange={() => setShowTokenDeals(!showTokenDeals)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-['''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                 <span className="ml-3 text-sm font-medium text-green-800">
                   Token Holder Deals
                 </span>
@@ -636,11 +694,7 @@ const Marketplace = () => {
               )}
             </p>
             <Button
-              onClick={() => {
-                setMaxDistance(50);
-                setSelectedCategory("all");
-                setSearchQuery("");
-              }}
+              onClick={resetFilters}
               className="bg-green-700 hover:bg-green-800 text-white"
             >
               Reset Filters
@@ -650,14 +704,12 @@ const Marketplace = () => {
       </main>
 
       {/* Product Modal */}
-      {selectedProduct && (
-        <ProductModal
-          product={selectedProduct}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          onAddToCart={handleAddToCart}
-        />
-      )}
+      <ProductModal
+        product={selectedProduct}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onAddToCart={handleAddToCart}
+      />
 
       <Footer />
     </div>
