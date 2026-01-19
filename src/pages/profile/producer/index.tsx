@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   User,
@@ -35,9 +35,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+import { useAuth } from "@/context/AuthContext";
 
-// Mock data
-const producerData = {
+const mockProducerData = {
   name: "Willow Grove Market Garden",
   username: "willowgrove",
   avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Willow",
@@ -158,6 +167,16 @@ const socialPosts = [
 ];
 
 const ProducerProfile = () => {
+  const { profile, loading, updateProfile } = useAuth();
+  const [producerData, setProducerData] = useState(mockProducerData);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      setProducerData({ ...mockProducerData, ...profile });
+    }
+  }, [profile]);
+
   const [newProduct, setNewProduct] = useState({
     name: "",
     price: "",
@@ -195,9 +214,7 @@ const ProducerProfile = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // In a real app, this would add the product to the database
     console.log("New product:", newProduct);
-    // Reset form
     setNewProduct({
       name: "",
       price: "",
@@ -205,6 +222,12 @@ const ProducerProfile = () => {
       quantity: "",
       description: "",
     });
+  };
+
+  const handleProfileUpdate = async (e) => {
+    e.preventDefault();
+    await updateProfile(producerData);
+    setIsSheetOpen(false);
   };
 
   return (
@@ -216,7 +239,6 @@ const ProducerProfile = () => {
       />
 
       <main className="container mx-auto px-4 py-8 md:py-24">
-        {/* Profile Header */}
         <div className="mb-8">
           <div className="rounded-xl overflow-hidden h-48 mb-6 relative">
             <img
@@ -262,7 +284,10 @@ const ProducerProfile = () => {
                     </div>
                   </div>
                 </div>
-                <Button className="bg-green-700 hover:bg-green-800 text-white">
+                <Button
+                  className="bg-green-700 hover:bg-green-800 text-white"
+                  onClick={() => setIsSheetOpen(true)}
+                >
                   <Settings className="h-4 w-4 mr-2" /> Edit Profile
                 </Button>
               </div>
@@ -274,7 +299,6 @@ const ProducerProfile = () => {
           </div>
         </div>
 
-        {/* Main Content */}
         <Tabs defaultValue="products" className="mb-8">
           <TabsList className="grid w-full grid-cols-3 bg-green-50">
             <TabsTrigger
@@ -692,6 +716,74 @@ const ProducerProfile = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+          <SheetContent className="w-[400px] sm:w-[540px]">
+            <SheetHeader>
+              <SheetTitle>Edit Profile</SheetTitle>
+              <SheetDescription>
+                Make changes to your profile here. Click save when you're done.
+              </SheetDescription>
+            </SheetHeader>
+            <form onSubmit={handleProfileUpdate} className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Farm Name</Label>
+                <Input
+                  id="name"
+                  value={producerData.name}
+                  onChange={(e) =>
+                    setProducerData({ ...producerData, name: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={producerData.location}
+                  onChange={(e) =>
+                    setProducerData({ ...producerData, location: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea
+                  id="bio"
+                  value={producerData.bio}
+                  onChange={(e) =>
+                    setProducerData({ ...producerData, bio: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="avatar">Avatar URL</Label>
+                <Input
+                  id="avatar"
+                  value={producerData.avatar}
+                  onChange={(e) =>
+                    setProducerData({ ...producerData, avatar: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="coverImage">Cover Image URL</Label>
+                <Input
+                  id="coverImage"
+                  value={producerData.coverImage}
+                  onChange={(e) =>
+                    setProducerData({ ...producerData, coverImage: e.target.value })
+                  }
+                />
+              </div>
+              <SheetFooter>
+                <SheetClose asChild>
+                  <Button type="submit">Save Changes</Button>
+                </SheetClose>
+              </SheetFooter>
+            </form>
+          </SheetContent>
+        </Sheet>
       </main>
 
       <Footer />

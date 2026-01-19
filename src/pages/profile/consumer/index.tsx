@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   User,
@@ -22,9 +22,24 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 // Mock data
-const userData = {
+const defaultUserData = {
   name: "Sarah Johnson",
   username: "sarahj",
   avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
@@ -115,7 +130,7 @@ const interactionHistory = [
     id: "1",
     type: "review",
     content:
-      "The carrots were incredibly fresh and sweet. Definitely the best I've had in a long time!",
+      "The carrots were incredibly fresh and sweet. Definitely the best I\'ve had in a long time!",
     target: "Organic Carrots",
     producer: "Green Valley Farm",
     date: "3 days ago",
@@ -125,8 +140,8 @@ const interactionHistory = [
     id: "2",
     type: "comment",
     content:
-      "I'd love to learn more about your beekeeping practices. Do you offer any workshops?",
-    target: "Meadow Honey's post",
+      "I\'d love to learn more about your beekeeping practices. Do you offer any workshops?",
+    target: "Meadow Honey\'s post",
     producer: "Meadow Honey",
     date: "1 week ago",
   },
@@ -143,6 +158,52 @@ const interactionHistory = [
 ];
 
 const ConsumerProfile = () => {
+  const [userData, setUserData] = useState(defaultUserData);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [location, setLocation] = useState("");
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const dbData = userDoc.data();
+          setUserData((prevData) => ({
+            ...prevData,
+            name: dbData.displayName || prevData.name,
+            location: dbData.location || prevData.location,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
+              dbData.displayName || prevData.name
+            }`,
+          }));
+          setDisplayName(dbData.displayName || defaultUserData.name);
+          setLocation(dbData.location || defaultUserData.location);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSave = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        displayName: displayName,
+        location: location,
+      });
+      setUserData((prevData) => ({
+        ...prevData,
+        name: displayName,
+        location: location,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`,
+      }));
+      setIsSheetOpen(false);
+    }
+  };
+
   return (
     <div className="bg-white min-h-screen">
       <Navbar
@@ -178,14 +239,58 @@ const ConsumerProfile = () => {
                     <span>Member since {userData.joinDate}</span>
                   </div>
                 </div>
-                <Button className="bg-green-700 hover:bg-green-800 text-white">
-                  <Settings className="h-4 w-4 mr-2" /> Edit Profile
-                </Button>
+                <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                  <SheetTrigger asChild>
+                    <Button className="bg-green-700 hover:bg-green-800 text-white">
+                      <Settings className="h-4 w-4 mr-2" /> Edit Profile
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent>
+                    <SheetHeader>
+                      <SheetTitle>Edit Profile</SheetTitle>
+                      <SheetDescription>
+                        Make changes to your profile here. Click save when you\'re
+                        done.
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">
+                          Display Name
+                        </Label>
+                        <Input
+                          id="name"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          className="col-span-3"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="location" className="text-right">
+                          Location
+                        </Label>
+                        <Input
+                          id="location"
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <SheetFooter>
+                      <SheetClose asChild>
+                        <Button type="submit" onClick={handleSave}>
+                          Save Changes
+                        </Button>
+                      </SheetClose>
+                    </SheetFooter>
+                  </SheetContent>
+                </Sheet>
               </div>
 
               <div className="mt-4 bg-green-50 rounded-lg p-4">
                 <p className="text-green-800 font-medium">
-                  Welcome back, {userData.name.split(" ")[0]}! You've supported{" "}
+                  Welcome back, {userData.name.split(" ")[0]}! You\'ve supported{" "}
                   {userData.supportedGrowers} local growers.
                 </p>
               </div>
@@ -534,7 +639,7 @@ const ConsumerProfile = () => {
                       <MapPin className="h-8 w-8 text-green-600" />
                     </div>
                     <p className="text-sm text-green-600">
-                      You'll see producers and products within this distance
+                      You\'ll see producers and products within this distance
                       from your location.
                     </p>
                   </div>

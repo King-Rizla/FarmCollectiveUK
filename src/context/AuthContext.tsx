@@ -16,6 +16,19 @@ interface UserProfile {
   full_name?: string;
   avatar_url?: string;
   isProducer?: boolean;
+  name?: string;
+  username?: string;
+  avatar?: string;
+  coverImage?: string;
+  location?: string;
+  bio?: string;
+  joinDate?: string;
+  tokenBalance?: number;
+  tokenTier?: string;
+  monthlySales?: number;
+  monthlySavings?: number;
+  rating?: number;
+  reviewCount?: number;
 }
 
 interface AuthContextType {
@@ -28,6 +41,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   activateProducerProfile: () => Promise<void>;
+  updateProfile: (newProfileData: Partial<UserProfile>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -148,6 +162,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const updateProfile = async (newProfileData: Partial<UserProfile>) => {
+    if (!session) throw new Error("No user is logged in.");
+    const userDocRef = doc(db, 'users', session.uid);
+    await updateDoc(userDocRef, newProfileData);
+    if (profile) {
+      const updatedProfile = { ...profile, ...newProfileData };
+      setProfile(updatedProfile);
+    }
+  };
+
   const value = {
     session,
     profile,
@@ -158,6 +182,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signInWithGoogle,
     signOut,
     activateProducerProfile,
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
