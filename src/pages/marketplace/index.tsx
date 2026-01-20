@@ -1,7 +1,11 @@
+/**
+ * Marketplace Page
+ * Browse and purchase products from local producers
+ */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Star, Filter, ShoppingBag } from "lucide-react";
+import { MapPin, Star, Filter, ShoppingBag, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -12,256 +16,74 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
+import { getAllProducts } from "@/services/products";
+import { calculatePurchaseTokens } from "@/services/tokens";
+import { Product, PRODUCT_CATEGORIES, ProductCategory } from "@/types/database";
 
-// --- DATA (Moved outside component) ---
-const products = [
-  {
-    id: "1",
-    name: "Organic Carrots",
-    image:
-      "https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=800&q=80",
-    price: 2.49,
-    unit: "bunch",
-    distance: 3.2,
-    producer: {
-      name: "Green Valley Farm",
-      rating: 4.8,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=GreenValley",
-    },
-    description:
-      "Freshly harvested organic carrots grown without pesticides. Sweet and crunchy, perfect for salads or roasting.",
-    category: "vegetables",
-  },
-  {
-    id: "2",
-    name: "Free-Range Eggs",
-    image:
-      "https://images.unsplash.com/photo-1598965675045-45c5e72c7d05?w=800&q=80",
-    price: 3.99,
-    unit: "dozen",
-    distance: 5.7,
-    producer: {
-      name: "Hillside Farm",
-      rating: 4.9,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Hillside",
-    },
-    description:
-      "Free-range eggs from happy hens that roam freely on our pastures. Rich in flavor with vibrant orange yolks.",
-    category: "dairy",
-  },
-  {
-    id: "3",
-    name: "Wildflower Honey",
-    image:
-      "https://images.unsplash.com/photo-1587049352851-8d4e89133924?w=800&q=80",
-    price: 6.5,
-    unit: "jar",
-    distance: 2.9,
-    producer: {
-      name: "Meadow Honey",
-      rating: 4.7,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Meadow",
-    },
-    description:
-      "Raw, unfiltered wildflower honey collected from our sustainable apiaries. Perfect for tea, baking, or straight from the jar.",
-    category: "specialty",
-  },
-  {
-    id: "4",
-    name: "Heritage Tomatoes",
-    image:
-      "https://images.unsplash.com/photo-1582284540020-8acbe03f4924?w=800&q=80",
-    price: 4.25,
-    unit: "500g",
-    distance: 4.1,
-    producer: {
-      name: "Riverside Organics",
-      rating: 4.6,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Riverside",
-    },
-    description:
-      "A colorful mix of heritage tomato varieties bursting with flavor. Grown using traditional methods and harvested at peak ripeness.",
-    category: "vegetables",
-  },
-  {
-    id: "5",
-    name: "Artisan Sourdough",
-    image:
-      "https://images.unsplash.com/photo-1585478259715-1c093a7b70d3?w=800&q=80",
-    price: 4.99,
-    unit: "loaf",
-    distance: 6.3,
-    producer: {
-      name: "Village Bakery",
-      rating: 4.9,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Village",
-    },
-    description:
-      "Traditional sourdough bread made with our 10-year-old starter. Naturally leavened and baked in a wood-fired oven for perfect crust and texture.",
-    category: "bakery",
-  },
-  {
-    id: "6",
-    name: "Fresh Goat Cheese",
-    image:
-      "https://images.unsplash.com/photo-1559561853-08451507cbe7?w=800&q=80",
-    price: 5.75,
-    unit: "200g",
-    distance: 7.8,
-    producer: {
-      name: "Hillside Dairy",
-      rating: 4.8,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=HillsideDairy",
-    },
-    description:
-      "Creamy, tangy goat cheese made in small batches from our own herd of free-range goats. Perfect for salads or spreading on crackers.",
-    category: "dairy",
-  },
-  {
-    id: "7",
-    name: "Seasonal Berry Mix",
-    image:
-      "https://images.unsplash.com/photo-1563746924237-f4471479790f?w=800&q=80",
-    price: 5.99,
-    unit: "punnet",
-    distance: 3.5,
-    producer: {
-      name: "Berry Fields",
-      rating: 4.7,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=BerryFields",
-    },
-    description:
-      "A delicious mix of seasonal berries including strawberries, raspberries, and blackberries. Picked at peak ripeness for maximum flavor.",
-    category: "fruit",
-  },
-  {
-    id: "8",
-    name: "Fresh Herb Bundle",
-    image:
-      "https://images.unsplash.com/photo-1600326145552-327c4b11f158?w=800&q=80",
-    price: 3.5,
-    unit: "bundle",
-    distance: 2.1,
-    producer: {
-      name: "Riverside Herbs",
-      rating: 4.6,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=RiversideHerbs",
-    },
-    description:
-      "Fresh-cut culinary herbs including rosemary, thyme, sage, and parsley. Grown using organic methods to ensure the best flavor for your cooking.",
-    category: "herbs",
-  },
-  {
-    id: "9",
-    name: "Grass-Fed Beef Steaks",
-    image:
-      "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=800&q=80",
-    price: 12.99,
-    unit: "500g",
-    distance: 8.4,
-    producer: {
-      name: "Meadow Farm",
-      rating: 4.9,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=MeadowFarm",
-    },
-    description:
-      "Premium grass-fed beef steaks from our ethically raised cattle. Tender, flavorful, and perfect for a special meal.",
-    category: "meat",
-  },
-  {
-    id: "10",
-    name: "Apple Cider Vinegar",
-    image:
-      "https://images.unsplash.com/photo-1598346762291-aee88549193f?w=800&q=80",
-    price: 4.25,
-    unit: "bottle",
-    distance: 5.2,
-    producer: {
-      name: "Orchard Press",
-      rating: 4.7,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=OrchardPress",
-    },
-    description:
-      "Raw, unfiltered apple cider vinegar with the mother, made from our heritage apple varieties. Great for dressings, marinades, or as a daily tonic.",
-    category: "specialty",
-  },
-  {
-    id: "11",
-    name: "Fresh Asparagus",
-    image:
-      "https://images.unsplash.com/photo-1589927986089-35812388d1f4?w=800&q=80",
-    price: 4.5,
-    unit: "bunch",
-    distance: 4.7,
-    producer: {
-      name: "Green Fields",
-      rating: 4.8,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=GreenFields",
-    },
-    description:
-      "Tender spring asparagus, hand-harvested at the perfect moment. Delicious grilled, roasted, or in salads.",
-    category: "vegetables",
-  },
-  {
-    id: "12",
-    name: "Raw Milk",
-    image:
-      "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=800&q=80",
-    price: 3.25,
-    unit: "liter",
-    distance: 6.9,
-    producer: {
-      name: "Oak Lane Dairy",
-      rating: 4.9,
-      image: "https://api.dicebear.com/7.x/avataaars/svg?seed=OakLane",
-    },
-    description:
-      "Fresh, unpasteurized milk from our grass-fed Jersey cows. Rich, creamy, and full of natural goodness.",
-    category: "dairy",
-  },
-];
+// Categories with "all" option
 const categories = [
   { value: "all", label: "All Products" },
-  { value: "vegetables", label: "Vegetables" },
-  { value: "fruit", label: "Fruit" },
-  { value: "dairy", label: "Dairy & Eggs" },
-  { value: "meat", label: "Meat" },
-  { value: "bakery", label: "Bakery" },
-  { value: "herbs", label: "Herbs" },
-  { value: "specialty", label: "Specialty" },
+  ...PRODUCT_CATEGORIES,
 ];
 
 // --- HOOK (Business Logic) ---
 const useMarketplaceLogic = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [maxDistance, setMaxDistance] = useState(50);
-  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [showTokenDeals, setShowTokenDeals] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch products from Firestore
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const fetchedProducts = await getAllProducts();
+        // Add mock distance for demo (would be calculated based on user location)
+        const productsWithDistance = fetchedProducts.map((p) => ({
+          ...p,
+          distance: Math.random() * 15 + 1, // Random 1-16 km for demo
+        }));
+        setProducts(productsWithDistance);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setError("Failed to load products. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const matchesDistance = product.distance <= maxDistance;
+      const matchesDistance = (product.distance || 0) <= maxDistance;
       const matchesCategory =
         selectedCategory === "all" || product.category === selectedCategory;
       const matchesSearch =
         searchQuery === "" ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.producer.name.toLowerCase().includes(searchQuery.toLowerCase());
+        product.producerName.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesDistance && matchesCategory && matchesSearch;
     });
-  }, [maxDistance, selectedCategory, searchQuery]);
+  }, [products, maxDistance, selectedCategory, searchQuery]);
 
-  const handleProductClick = (product) => {
+  const handleProductClick = (product: Product) => {
     setSelectedProduct(product);
     setIsModalOpen(true);
   };
@@ -271,23 +93,6 @@ const useMarketplaceLogic = () => {
     setSelectedProduct(null);
   };
 
-  const handleAddToCart = (product, quantity) => {
-    const existingItemIndex = cart.findIndex(
-      (item) => item.product.id === product.id
-    );
-
-    if (existingItemIndex >= 0) {
-      const updatedCart = [...cart];
-      updatedCart[existingItemIndex].quantity += quantity;
-      setCart(updatedCart);
-    } else {
-      setCart([...cart, { product, quantity }]);
-    }
-
-    setIsModalOpen(false);
-    // You could add a toast notification here
-  };
-  
   const resetFilters = () => {
     setMaxDistance(50);
     setSelectedCategory("all");
@@ -295,7 +100,9 @@ const useMarketplaceLogic = () => {
   };
 
   return {
-    // State
+    products,
+    loading,
+    error,
     maxDistance,
     selectedCategory,
     showTokenDeals,
@@ -303,56 +110,78 @@ const useMarketplaceLogic = () => {
     isModalOpen,
     searchQuery,
     filteredProducts,
-    
-    // State Setters
     setMaxDistance,
     setSelectedCategory,
     setShowTokenDeals,
     setSearchQuery,
-    
-    // Handlers
     handleProductClick,
     handleCloseModal,
-    handleAddToCart,
     resetFilters,
   };
 };
 
 // --- UI COMPONENTS ---
-const ProductCard = ({ product, onClick }) => {
+const ProductCardSkeleton = () => (
+  <Card className="h-full overflow-hidden">
+    <Skeleton className="aspect-square w-full" />
+    <CardContent className="p-4">
+      <Skeleton className="h-6 w-3/4 mb-2" />
+      <Skeleton className="h-4 w-1/2" />
+    </CardContent>
+    <CardFooter className="p-4 pt-0">
+      <Skeleton className="h-10 w-full" />
+    </CardFooter>
+  </Card>
+);
+
+interface ProductCardProps {
+  product: Product;
+  onClick: () => void;
+}
+
+const ProductCard = ({ product, onClick }: ProductCardProps) => {
   return (
     <Card className="h-full overflow-hidden border border-green-100 bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
       <div className="aspect-square relative overflow-hidden bg-green-50">
         <img
-          src={product.image}
+          src={product.imageUrl}
           alt={product.name}
           className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
         />
-        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full flex items-center text-sm font-medium text-green-800">
-          <MapPin className="h-3.5 w-3.5 mr-1 text-green-600" />
-          <span>{product.distance} km</span>
-        </div>
+        {product.distance && (
+          <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full flex items-center text-sm font-medium text-green-800">
+            <MapPin className="h-3.5 w-3.5 mr-1 text-green-600" />
+            <span>{product.distance.toFixed(1)} km</span>
+          </div>
+        )}
+        {!product.isAvailable && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <span className="text-white font-medium">Out of Stock</span>
+          </div>
+        )}
       </div>
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-2">
           <h3 className="font-serif font-medium text-lg text-green-900">
             {product.name}
           </h3>
-          <div className="flex items-center text-amber-500">
-            <Star className="h-4 w-4 fill-current" />
-            <span className="ml-1 text-sm font-medium">
-              {product.producer.rating}
-            </span>
-          </div>
+          {product.producerRating && (
+            <div className="flex items-center text-amber-500">
+              <Star className="h-4 w-4 fill-current" />
+              <span className="ml-1 text-sm font-medium">
+                {product.producerRating.toFixed(1)}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex justify-between items-center">
           <p className="text-green-800 font-medium">
-            £{product.price.toFixed(2)}{" "}
+            {product.price.toFixed(2)}{" "}
             <span className="text-sm text-green-600">/ {product.unit}</span>
           </p>
           <div className="flex items-center text-sm text-green-700">
             <span className="truncate max-w-[100px]">
-              {product.producer.name}
+              {product.producerName}
             </span>
           </div>
         </div>
@@ -361,19 +190,29 @@ const ProductCard = ({ product, onClick }) => {
         <Button
           onClick={onClick}
           className="w-full bg-green-700 hover:bg-green-800 text-white"
+          disabled={!product.isAvailable}
         >
           <ShoppingBag className="h-4 w-4 mr-2" />
-          View Product
+          {product.isAvailable ? "View Product" : "Out of Stock"}
         </Button>
       </CardFooter>
     </Card>
   );
 };
 
-const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
-  const [quantity, setQuantity] = useState(1);
+interface ProductModalProps {
+  product: Product | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
 
-  const handleQuantityChange = (e) => {
+const ProductModal = ({ product, isOpen, onClose }: ProductModalProps) => {
+  const [quantity, setQuantity] = useState(1);
+  const [adding, setAdding] = useState(false);
+  const { addToCart } = useCart();
+  const { session } = useAuth();
+
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (value > 0) setQuantity(value);
   };
@@ -382,7 +221,18 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
   const decrementQuantity = () => {
     if (quantity > 1) setQuantity(quantity - 1);
   };
-  
+
+  const handleAddToCart = async () => {
+    if (!product) return;
+    setAdding(true);
+    try {
+      await addToCart(product, quantity);
+      onClose();
+    } finally {
+      setAdding(false);
+    }
+  };
+
   // Reset quantity when modal opens for a new product
   React.useEffect(() => {
     if (isOpen) {
@@ -392,6 +242,8 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
 
   if (!product) return null;
 
+  const tokensEarned = calculatePurchaseTokens(product.price * quantity);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] bg-white">
@@ -400,21 +252,25 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
             {product.name}
           </DialogTitle>
           <DialogDescription className="flex items-center text-green-700">
-            <span className="flex items-center mr-4">
-              <Star className="h-4 w-4 text-amber-500 fill-current mr-1" />
-              {product.producer.rating}
-            </span>
-            <span className="flex items-center">
-              <MapPin className="h-4 w-4 text-green-600 mr-1" />
-              {product.distance} km away
-            </span>
+            {product.producerRating && (
+              <span className="flex items-center mr-4">
+                <Star className="h-4 w-4 text-amber-500 fill-current mr-1" />
+                {product.producerRating.toFixed(1)}
+              </span>
+            )}
+            {product.distance && (
+              <span className="flex items-center">
+                <MapPin className="h-4 w-4 text-green-600 mr-1" />
+                {product.distance.toFixed(1)} km away
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="aspect-square overflow-hidden rounded-md bg-green-50">
             <img
-              src={product.image}
+              src={product.imageUrl}
               alt={product.name}
               className="object-cover w-full h-full"
             />
@@ -423,7 +279,7 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
           <div className="flex flex-col">
             <div className="mb-4">
               <p className="text-2xl font-medium text-green-800 mb-2">
-                £{product.price.toFixed(2)}{" "}
+                {product.price.toFixed(2)}{" "}
                 <span className="text-sm text-green-600">
                   / {product.unit}
                 </span>
@@ -457,15 +313,21 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
               </div>
 
               <div className="flex items-center mb-4">
-                <img
-                  src={product.producer.image}
-                  alt={product.producer.name}
-                  className="w-8 h-8 rounded-full mr-2"
-                />
+                {product.producerAvatar && (
+                  <img
+                    src={product.producerAvatar}
+                    alt={product.producerName}
+                    className="w-8 h-8 rounded-full mr-2"
+                  />
+                )}
                 <span className="text-green-800">
-                  From {product.producer.name}
+                  From {product.producerName}
                 </span>
               </div>
+
+              <p className="text-sm text-green-600 mb-2">
+                {product.stockQuantity} in stock
+              </p>
             </div>
 
             <Tabs defaultValue="description" className="w-full">
@@ -478,7 +340,7 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                 <div className="mt-4 p-3 bg-amber-50 rounded-md border border-amber-100">
                   <p className="text-sm text-amber-800">
                     <span className="font-medium">$FCUK Token Rewards:</span>{" "}
-                    Earn 5 tokens with this purchase!
+                    Earn {tokensEarned} tokens with this purchase!
                   </p>
                 </div>
               </TabsContent>
@@ -488,7 +350,7 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                     <div className="flex items-center mb-2">
                       <div className="flex items-center text-amber-500 mr-2">
                         {[...Array(5)].map((_, i) => (
-                           <Star key={i} className="h-4 w-4 fill-current" />
+                          <Star key={i} className="h-4 w-4 fill-current" />
                         ))}
                       </div>
                       <span className="font-medium text-green-800">
@@ -508,10 +370,10 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
                   <div className="p-3 border border-green-100 rounded-md">
                     <div className="flex items-center mb-2">
                       <div className="flex items-center text-amber-500 mr-2">
-                         {[...Array(4)].map((_, i) => (
-                           <Star key={i} className="h-4 w-4 fill-current" />
+                        {[...Array(4)].map((_, i) => (
+                          <Star key={i} className="h-4 w-4 fill-current" />
                         ))}
-                         <Star className="h-4 w-4 fill-current opacity-30" />
+                        <Star className="h-4 w-4 fill-current opacity-30" />
                       </div>
                       <span className="font-medium text-green-800">
                         Mark T.
@@ -531,12 +393,19 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
 
             <div className="mt-auto pt-4">
               <Button
-                onClick={() => onAddToCart(product, quantity)}
+                onClick={handleAddToCart}
                 className="w-full bg-green-700 hover:bg-green-800 text-white py-6"
                 size="lg"
+                disabled={adding || !session}
               >
-                <ShoppingBag className="h-5 w-5 mr-2" />
-                Add to Cart - £{(product.price * quantity).toFixed(2)}
+                {adding ? (
+                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                ) : (
+                  <ShoppingBag className="h-5 w-5 mr-2" />
+                )}
+                {session
+                  ? `Add to Cart - ${(product.price * quantity).toFixed(2)}`
+                  : "Sign in to Add to Cart"}
               </Button>
             </div>
           </div>
@@ -549,6 +418,8 @@ const ProductModal = ({ product, isOpen, onClose, onAddToCart }) => {
 // --- MAIN COMPONENT (View Layer) ---
 const Marketplace = () => {
   const {
+    loading,
+    error,
     maxDistance,
     selectedCategory,
     showTokenDeals,
@@ -562,9 +433,10 @@ const Marketplace = () => {
     setSearchQuery,
     handleProductClick,
     handleCloseModal,
-    handleAddToCart,
     resetFilters,
   } = useMarketplaceLogic();
+
+  const { itemCount } = useCart();
 
   return (
     <div className="bg-white min-h-screen">
@@ -636,7 +508,7 @@ const Marketplace = () => {
                   onChange={() => setShowTokenDeals(!showTokenDeals)}
                   className="sr-only peer"
                 />
-                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-['''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                 <span className="ml-3 text-sm font-medium text-green-800">
                   Token Holder Deals
                 </span>
@@ -648,31 +520,69 @@ const Marketplace = () => {
         {/* Results Count */}
         <div className="mb-6 flex justify-between items-center">
           <p className="text-green-700">
-            Showing{" "}
-            <span className="font-medium">{filteredProducts.length}</span>{" "}
-            products within <span className="font-medium">{maxDistance}km</span>
-            {searchQuery && (
+            {loading ? (
+              "Loading products..."
+            ) : (
               <>
-                {" "}
-                matching <span className="font-medium">"{searchQuery}"</span>
+                Showing{" "}
+                <span className="font-medium">{filteredProducts.length}</span>{" "}
+                products within <span className="font-medium">{maxDistance}km</span>
+                {searchQuery && (
+                  <>
+                    {" "}
+                    matching <span className="font-medium">"{searchQuery}"</span>
+                  </>
+                )}
               </>
             )}
           </p>
 
-          <div className="flex items-center">
-            <Filter className="h-5 w-5 text-green-700 mr-2" />
-            <span className="text-green-700">Sort by: </span>
-            <select className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none">
-              <option>Distance</option>
-              <option>Price: Low to High</option>
-              <option>Price: High to Low</option>
-              <option>Rating</option>
-            </select>
+          <div className="flex items-center gap-4">
+            {itemCount > 0 && (
+              <Link to="/cart">
+                <Button variant="outline" className="border-green-200">
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  Cart ({itemCount})
+                </Button>
+              </Link>
+            )}
+            <div className="flex items-center">
+              <Filter className="h-5 w-5 text-green-700 mr-2" />
+              <span className="text-green-700">Sort by: </span>
+              <select className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none">
+                <option>Distance</option>
+                <option>Price: Low to High</option>
+                <option>Price: High to Low</option>
+                <option>Rating</option>
+              </select>
+            </div>
           </div>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12">
+            <p className="text-lg text-red-600 mb-4">{error}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="bg-green-700 hover:bg-green-800 text-white"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <ProductCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
+
         {/* Products Grid */}
-        {filteredProducts.length > 0 ? (
+        {!loading && !error && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
               <ProductCard
@@ -682,7 +592,10 @@ const Marketplace = () => {
               />
             ))}
           </div>
-        ) : (
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && filteredProducts.length === 0 && (
           <div className="text-center py-12">
             <p className="text-lg text-green-800 mb-4">
               No products found matching your criteria
@@ -708,7 +621,6 @@ const Marketplace = () => {
         product={selectedProduct}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        onAddToCart={handleAddToCart}
       />
 
       <Footer />

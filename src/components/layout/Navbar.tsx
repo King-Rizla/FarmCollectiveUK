@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 
 // Define the props for the Navbar component
 interface NavbarProps {
@@ -50,7 +51,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const isActive = (path: string) => location.pathname === path;
 
-  const cartCount = 3; // Simulated
+  const { itemCount: cartCount } = useCart();
   
   // Use props if provided, otherwise fall back to context
   const isLoggedIn = isLoggedInProp !== undefined ? isLoggedInProp : session !== null;
