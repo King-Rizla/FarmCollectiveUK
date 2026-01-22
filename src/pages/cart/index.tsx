@@ -4,7 +4,8 @@
  */
 
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingBag, Trash2, Minus, Plus, Loader2, ArrowLeft } from "lucide-react";
+import { ShoppingBag, Trash2, Minus, Plus, Loader2, ArrowLeft, Calendar } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -143,15 +144,24 @@ export default function Cart() {
                 {cartItems.map((item) => (
                   <Card
                     key={item.id}
-                    className="overflow-hidden hover:shadow-md transition-shadow"
+                    className={`overflow-hidden hover:shadow-md transition-shadow ${
+                      item.isReservation ? "border-amber-200" : ""
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row">
-                      <div className="w-full sm:w-1/4 h-32 sm:h-auto bg-gray-100">
+                      <div className="relative w-full sm:w-1/4 h-32 sm:h-auto bg-gray-100">
                         <img
                           src={item.productImage}
                           alt={item.productName}
                           className="w-full h-full object-cover"
                         />
+                        {item.isReservation && (
+                          <div className="absolute top-2 left-2">
+                            <Badge className="bg-amber-600 text-white text-xs">
+                              Pre-Order
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 p-4">
                         <div className="flex justify-between">
@@ -162,6 +172,16 @@ export default function Cart() {
                             <p className="text-sm text-gray-600">
                               From: {item.producerName}
                             </p>
+                            {item.isReservation && item.readyDate && (
+                              <p className="text-sm text-amber-600 mt-1 flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Ready: {new Date(item.readyDate).toLocaleDateString("en-GB", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-green-800">

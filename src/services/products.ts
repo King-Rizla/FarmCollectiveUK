@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db } from '@/lib/firebase';
-import { Product, ProductFormData, ProductCategory } from '@/types/database';
+import { Product, ProductFormData, ProductCategory, ProductType } from '@/types/database';
 
 const PRODUCTS_COLLECTION = 'products';
 
@@ -44,6 +44,10 @@ const docToProduct = (doc: any): Product => {
     stockQuantity: data.stockQuantity,
     isAvailable: data.isAvailable,
     distance: data.distance,
+    productType: data.productType || 'available',
+    readyDate: data.readyDate?.toDate(),
+    totalShares: data.totalShares,
+    reservedShares: data.reservedShares || 0,
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
   };
@@ -64,6 +68,34 @@ export const getAllProducts = async (): Promise<Product[]> => {
   } catch (error) {
     console.error('Error fetching products:', error);
     throw error;
+  }
+};
+
+/**
+ * Get all growing (pre-order) products
+ */
+export const getGrowingProducts = async (): Promise<Product[]> => {
+  try {
+    const q = query(
+      collection(db, PRODUCTS_COLLECTION),
+      where('productType', '==', 'growing'),
+      where('isAvailable', '==', true),
+      orderBy('readyDate', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(docToProduct);
+  } catch (error) {
+    console.error('Error fetching growing products:', error);
+    // Fallback: get all products and filter client-side
+    try {
+      const allSnapshot = await getDocs(collection(db, PRODUCTS_COLLECTION));
+      return allSnapshot.docs
+        .map(docToProduct)
+        .filter((p) => p.productType === 'growing' && p.isAvailable);
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      throw fallbackError;
+    }
   }
 };
 
@@ -137,16 +169,27 @@ export const createProduct = async (
   productData: ProductFormData
 ): Promise<Product> => {
   try {
-    const newProduct = {
+    const productType = productData.productType || 'available';
+    const isGrowing = productType === 'growing';
+
+    const newProduct: any = {
       ...productData,
       producerId,
       producerName,
       producerAvatar,
       producerRating,
+      productType,
       isAvailable: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
+
+    // Add growing-specific fields
+    if (isGrowing) {
+      newProduct.readyDate = productData.readyDate;
+      newProduct.totalShares = productData.totalShares || 10;
+      newProduct.reservedShares = 0;
+    }
 
     const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), newProduct);
 
@@ -157,7 +200,11 @@ export const createProduct = async (
       producerName,
       producerAvatar,
       producerRating,
+      productType,
       isAvailable: true,
+      readyDate: productData.readyDate,
+      totalShares: isGrowing ? (productData.totalShares || 10) : undefined,
+      reservedShares: isGrowing ? 0 : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -238,6 +285,44 @@ export const updateProductStock = async (
     });
   } catch (error) {
     console.error('Error updating product stock:', error);
+    throw error;
+  }
+};
+
+/**
+ * Reserve shares of a growing product
+ */
+export const reserveProductShares = async (
+  productId: string,
+  sharesToReserve: number
+): Promise<boolean> => {
+  try {
+    const product = await getProductById(productId);
+    if (!product) {
+      throw new Error('Product not found');
+    }
+
+    if (product.productType !== 'growing') {
+      throw new Error('Product is not a growing product');
+    }
+
+    const availableShares = (product.totalShares || 0) - (product.reservedShares || 0);
+    if (sharesToReserve > availableShares) {
+      throw new Error('Not enough shares available');
+    }
+
+    const docRef = doc(db, PRODUCTS_COLLECTION, productId);
+    const newReservedShares = (product.reservedShares || 0) + sharesToReserve;
+
+    await updateDoc(docRef, {
+      reservedShares: newReservedShares,
+      isAvailable: newReservedShares < (product.totalShares || 0),
+      updatedAt: serverTimestamp(),
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error reserving product shares:', error);
     throw error;
   }
 };

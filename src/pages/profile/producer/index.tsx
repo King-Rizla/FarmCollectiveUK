@@ -73,32 +73,53 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   getProductsByProducer,
   createProduct,
   updateProduct,
   deleteProduct,
 } from "@/services/products";
-import { getProducerOrders } from "@/services/orders";
+import { getProducerOrders, updateOrderStatus } from "@/services/orders";
 import { getUserTokenInfo } from "@/services/tokens";
 import {
   Product,
   ProductFormData,
   PRODUCT_CATEGORIES,
   ProductCategory,
+  ProductType,
   Order,
+  OrderStatus,
   TokenTier,
 } from "@/types/database";
+import { PlantBadge } from "@/components/ui/plant-badge";
 
 // Product form validation schema
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   price: z.coerce.number().min(0.01, "Price must be greater than 0"),
-  unit: z.string().min(1, "Unit is required"),
+  unit: z.string().optional(), // Optional for growing products (uses "share" automatically)
   category: z.string().min(1, "Category is required"),
   imageUrl: z.string().url("Must be a valid URL"),
-  stockQuantity: z.coerce.number().min(0, "Stock cannot be negative"),
+  stockQuantity: z.coerce.number().min(0, "Stock cannot be negative").optional(),
+  productType: z.enum(["available", "growing"]).default("available"),
+  readyDate: z.string().optional(),
+  totalShares: z.coerce.number().min(1).optional(),
+}).refine((data) => {
+  // If available, unit and stockQuantity are required
+  if (data.productType === "available") {
+    return data.unit && data.unit.length > 0 && data.stockQuantity !== undefined;
+  }
+  // If growing, readyDate is required
+  if (data.productType === "growing") {
+    return data.readyDate && data.readyDate.length > 0;
+  }
+  return true;
+}, {
+  message: "Please fill in all required fields",
+  path: ["unit"],
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -141,6 +162,7 @@ const ProducerProfile = () => {
     balance: 0,
     tier: "Bronze",
   });
+  const [salesCount, setSalesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -148,6 +170,7 @@ const ProducerProfile = () => {
   const [searchValue, setSearchValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState<string | null>(null);
 
   // Producer data (merge profile with defaults)
   const producerData = {
@@ -179,10 +202,14 @@ const ProducerProfile = () => {
       category: "",
       imageUrl: "",
       stockQuantity: 0,
+      productType: "available",
+      readyDate: "",
+      totalShares: 10,
     },
   });
 
   const selectedCategory = watch("category");
+  const selectedProductType = watch("productType");
 
   // Fetch data
   useEffect(() => {
@@ -191,15 +218,21 @@ const ProducerProfile = () => {
 
       setLoading(true);
       try {
-        const [productsData, ordersData, tokenData] = await Promise.all([
+        const [productsData, ordersData, tokenData, userDocSnap] = await Promise.all([
           getProductsByProducer(session.uid),
           getProducerOrders(session.uid),
           getUserTokenInfo(session.uid),
+          getDoc(doc(db, "users", session.uid)),
         ]);
 
         setProducts(productsData);
         setOrders(ordersData);
         setTokenInfo(tokenData);
+
+        // Get salesCount from user document
+        if (userDocSnap.exists()) {
+          setSalesCount(userDocSnap.data().salesCount || 0);
+        }
       } catch (error) {
         console.error("Error fetching producer data:", error);
         toast({
@@ -270,14 +303,18 @@ const ProducerProfile = () => {
 
     setSaving(true);
     try {
+      const isGrowing = data.productType === "growing";
       const productData: ProductFormData = {
         name: data.name,
         description: data.description,
         price: data.price,
-        unit: data.unit,
+        unit: isGrowing ? "share" : data.unit,
         category: data.category as ProductCategory,
         imageUrl: data.imageUrl,
-        stockQuantity: data.stockQuantity,
+        stockQuantity: isGrowing ? (data.totalShares || 10) : data.stockQuantity,
+        productType: data.productType as ProductType,
+        readyDate: isGrowing && data.readyDate ? new Date(data.readyDate) : undefined,
+        totalShares: isGrowing ? (data.totalShares || 10) : undefined,
       };
 
       if (editingProduct) {
@@ -305,8 +342,10 @@ const ProducerProfile = () => {
         );
         setProducts((prev) => [newProduct, ...prev]);
         toast({
-          title: "Product created",
-          description: `${data.name} is now listed on the marketplace.`,
+          title: isGrowing ? "Pre-order listing created" : "Product created",
+          description: isGrowing
+            ? `${data.name} is now available for pre-orders.`
+            : `${data.name} is now listed on the marketplace.`,
         });
       }
 
@@ -336,6 +375,9 @@ const ProducerProfile = () => {
       category: product.category,
       imageUrl: product.imageUrl,
       stockQuantity: product.stockQuantity,
+      productType: product.productType || "available",
+      readyDate: product.readyDate ? new Date(product.readyDate).toISOString().split("T")[0] : "",
+      totalShares: product.totalShares || 10,
     });
     setIsProductDialogOpen(true);
   };
@@ -373,6 +415,9 @@ const ProducerProfile = () => {
       category: "",
       imageUrl: "",
       stockQuantity: 0,
+      productType: "available",
+      readyDate: "",
+      totalShares: 10,
     });
     setIsProductDialogOpen(true);
   };
@@ -399,6 +444,45 @@ const ProducerProfile = () => {
         description: "Failed to update profile.",
         variant: "destructive",
       });
+    }
+  };
+
+  // Handle order status update
+  const handleOrderStatusUpdate = async (orderId: string, newStatus: OrderStatus) => {
+    setUpdatingOrderStatus(orderId);
+    try {
+      // Get the current order to check previous status
+      const currentOrder = orders.find((o) => o.id === orderId);
+      const wasDelivered = currentOrder?.status === "delivered";
+
+      await updateOrderStatus(orderId, newStatus);
+
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? { ...order, status: newStatus, updatedAt: new Date() }
+            : order
+        )
+      );
+
+      // If marking as delivered (and wasn't already), increment local salesCount
+      if (newStatus === "delivered" && !wasDelivered) {
+        setSalesCount((prev) => prev + 1);
+      }
+
+      toast({
+        title: "Order updated",
+        description: `Order status changed to ${newStatus}.`,
+      });
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update order status.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingOrderStatus(null);
     }
   };
 
@@ -438,22 +522,19 @@ const ProducerProfile = () => {
             <div className="flex-1">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-3xl font-serif font-semibold text-green-800">
-                    {producerData.name}
-                  </h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-3xl font-serif font-semibold text-green-800">
+                      {producerData.name}
+                    </h1>
+                    <PlantBadge salesCount={salesCount} size="lg" />
+                  </div>
                   <div className="flex items-center text-green-600 mt-1">
                     <MapPin className="h-4 w-4 mr-1" />
                     <span>{producerData.location}</span>
-                    {producerData.rating > 0 && (
+                    {salesCount > 0 && (
                       <>
-                        <span className="mx-2">*</span>
-                        <div className="flex items-center">
-                          <Star className="h-4 w-4 text-amber-500 fill-current mr-1" />
-                          <span>{producerData.rating.toFixed(1)}</span>
-                          <span className="ml-1">
-                            ({producerData.reviewCount} reviews)
-                          </span>
-                        </div>
+                        <span className="mx-2">•</span>
+                        <span>{salesCount} completed sales</span>
                       </>
                     )}
                   </div>
@@ -758,21 +839,32 @@ const ProducerProfile = () => {
                                   ))}
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <Badge
-                                  className={cn(
-                                    order.status === "paid" &&
-                                      "bg-yellow-100 text-yellow-800",
-                                    order.status === "shipped" &&
-                                      "bg-blue-100 text-blue-800",
-                                    order.status === "delivered" &&
-                                      "bg-green-100 text-green-800"
-                                  )}
+                              <div className="text-right space-y-2">
+                                <Select
+                                  value={order.status}
+                                  onValueChange={(value: OrderStatus) =>
+                                    handleOrderStatusUpdate(order.id, value)
+                                  }
+                                  disabled={updatingOrderStatus === order.id}
                                 >
-                                  {order.status}
-                                </Badge>
-                                <p className="mt-2 font-medium text-green-800">
-                                  {myTotal.toFixed(2)}
+                                  <SelectTrigger className={cn(
+                                    "w-32",
+                                    order.status === "reserved" && "bg-amber-50 border-amber-200",
+                                    order.status === "paid" && "bg-yellow-50 border-yellow-200",
+                                    order.status === "shipped" && "bg-blue-50 border-blue-200",
+                                    order.status === "delivered" && "bg-green-50 border-green-200"
+                                  )}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="reserved">Reserved</SelectItem>
+                                    <SelectItem value="paid">Paid</SelectItem>
+                                    <SelectItem value="shipped">Shipped</SelectItem>
+                                    <SelectItem value="delivered">Delivered</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="font-medium text-green-800">
+                                  £{myTotal.toFixed(2)}
                                 </p>
                               </div>
                             </div>
@@ -972,14 +1064,80 @@ const ProducerProfile = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              {/* Product Type Toggle */}
+              <div className="space-y-2">
+                <Label>Availability</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={selectedProductType === "available" ? "default" : "outline"}
+                    className={cn(
+                      "flex-1",
+                      selectedProductType === "available"
+                        ? "bg-green-700 hover:bg-green-800"
+                        : "border-green-200"
+                    )}
+                    onClick={() => setValue("productType", "available")}
+                  >
+                    Available Now
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={selectedProductType === "growing" ? "default" : "outline"}
+                    className={cn(
+                      "flex-1",
+                      selectedProductType === "growing"
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "border-amber-200"
+                    )}
+                    onClick={() => setValue("productType", "growing")}
+                  >
+                    Coming Soon (Pre-order)
+                  </Button>
+                </div>
+              </div>
+
+              {/* Growing-specific fields */}
+              {selectedProductType === "growing" && (
+                <div className="grid grid-cols-2 gap-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="space-y-2">
+                    <Label htmlFor="readyDate">Ready Date</Label>
+                    <Input
+                      id="readyDate"
+                      type="date"
+                      {...register("readyDate")}
+                      min={new Date().toISOString().split("T")[0]}
+                    />
+                    <p className="text-xs text-amber-600">
+                      When will this harvest be ready?
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="totalShares">Total Shares</Label>
+                    <Input
+                      id="totalShares"
+                      type="number"
+                      min="1"
+                      placeholder="10"
+                      {...register("totalShares")}
+                    />
+                    <p className="text-xs text-amber-600">
+                      How many shares available for pre-order?
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className={cn("grid gap-4", selectedProductType === "growing" ? "grid-cols-1" : "grid-cols-3")}>
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price ()</Label>
+                  <Label htmlFor="price">
+                    {selectedProductType === "growing" ? "Price per Share (£)" : "Price (£)"}
+                  </Label>
                   <Input
                     id="price"
                     type="number"
                     step="0.01"
-                    placeholder="2.99"
+                    placeholder={selectedProductType === "growing" ? "15.00" : "2.99"}
                     {...register("price")}
                     className={errors.price ? "border-red-500" : ""}
                   />
@@ -988,34 +1146,38 @@ const ProducerProfile = () => {
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unit</Label>
-                  <Input
-                    id="unit"
-                    placeholder="kg, bunch, dozen..."
-                    {...register("unit")}
-                    className={errors.unit ? "border-red-500" : ""}
-                  />
-                  {errors.unit && (
-                    <p className="text-sm text-red-500">{errors.unit.message}</p>
-                  )}
-                </div>
+                {selectedProductType !== "growing" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="unit">Unit</Label>
+                      <Input
+                        id="unit"
+                        placeholder="kg, bunch, dozen..."
+                        {...register("unit")}
+                        className={errors.unit ? "border-red-500" : ""}
+                      />
+                      {errors.unit && (
+                        <p className="text-sm text-red-500">{errors.unit.message}</p>
+                      )}
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="stockQuantity">Stock Quantity</Label>
-                  <Input
-                    id="stockQuantity"
-                    type="number"
-                    placeholder="10"
-                    {...register("stockQuantity")}
-                    className={errors.stockQuantity ? "border-red-500" : ""}
-                  />
-                  {errors.stockQuantity && (
-                    <p className="text-sm text-red-500">
-                      {errors.stockQuantity.message}
-                    </p>
-                  )}
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stockQuantity">Stock Quantity</Label>
+                      <Input
+                        id="stockQuantity"
+                        type="number"
+                        placeholder="10"
+                        {...register("stockQuantity")}
+                        className={errors.stockQuantity ? "border-red-500" : ""}
+                      />
+                      {errors.stockQuantity && (
+                        <p className="text-sm text-red-500">
+                          {errors.stockQuantity.message}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="space-y-2">

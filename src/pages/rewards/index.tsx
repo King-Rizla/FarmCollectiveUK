@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Coins, TrendingUp, PieChart, Award, Shield, Zap } from "lucide-react";
+import { Coins, TrendingUp, PieChart, Award, Shield, Zap, Heart, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,8 +12,13 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { useAuth } from "@/context/AuthContext";
+import { getUserTokenInfo } from "@/services/tokens";
+import { getCommunityPotData, CommunityPotData } from "@/services/community-pot";
+import { TokenTier, TOKEN_TIER_THRESHOLDS } from "@/types/database";
 
 // Mock data for charts
 const monthlyData = [
@@ -26,9 +31,52 @@ const monthlyData = [
 ];
 
 const TokenRewards = () => {
-  // User's token balance
-  const userTokens = 520;
-  const userTier = "Silver";
+  const { session } = useAuth();
+  const [userTokens, setUserTokens] = useState(0);
+  const [userTier, setUserTier] = useState<TokenTier>("Bronze");
+  const [communityPot, setCommunityPot] = useState<CommunityPotData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Calculate next tier and tokens needed
+  const getNextTierInfo = (currentTier: TokenTier, currentTokens: number) => {
+    const tiers: TokenTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
+    const currentIndex = tiers.indexOf(currentTier);
+    if (currentIndex >= tiers.length - 1) {
+      return { nextTier: null, tokensNeeded: 0 };
+    }
+    const nextTier = tiers[currentIndex + 1];
+    const tokensNeeded = TOKEN_TIER_THRESHOLDS[nextTier] - currentTokens;
+    return { nextTier, tokensNeeded };
+  };
+
+  const { nextTier, tokensNeeded } = getNextTierInfo(userTier, userTokens);
+
+  // Fetch real data
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [potData] = await Promise.all([
+          getCommunityPotData(),
+        ]);
+        setCommunityPot(potData);
+
+        // Fetch user token info if signed in
+        if (session?.uid) {
+          const tokenInfo = await getUserTokenInfo(session.uid);
+          setUserTokens(tokenInfo.balance);
+          setUserTier(tokenInfo.tier);
+        }
+      } catch (error) {
+        console.error("Error fetching rewards data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [session?.uid]);
+
   const monthlySpending = 124.75;
   const monthlySavings = 8.53;
 
@@ -101,15 +149,108 @@ const TokenRewards = () => {
               <div className="flex items-center">
                 <Award className="h-8 w-8 text-amber-600 mr-3" />
                 <div>
-                  <p className="text-3xl font-bold text-green-800">Gold Tier</p>
-                  <p className="text-sm text-green-600">
-                    480 more tokens needed
-                  </p>
+                  {nextTier ? (
+                    <>
+                      <p className="text-3xl font-bold text-green-800">{nextTier} Tier</p>
+                      <p className="text-sm text-green-600">
+                        {tokensNeeded} more tokens needed
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-3xl font-bold text-green-800">Max Tier!</p>
+                      <p className="text-sm text-green-600">
+                        You've reached the top
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Community Pot Section */}
+        {communityPot && (
+          <div className="mb-12">
+            <Card className="border-2 border-rose-200 bg-gradient-to-br from-rose-50 to-orange-50">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-rose-100 rounded-full">
+                      <Heart className="h-6 w-6 text-rose-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl text-rose-800">
+                        The Community Pot
+                      </CardTitle>
+                      <CardDescription className="text-rose-600">
+                        1% of every purchase supports local initiatives
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-rose-700">
+                      £{communityPot.totalAmount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-sm text-rose-600">Total raised</p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Current Initiative */}
+                <div className="bg-white rounded-lg p-6 mb-6 border border-rose-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="h-5 w-5 text-rose-600" />
+                    <h3 className="font-semibold text-rose-800">This Month's Initiative</h3>
+                  </div>
+                  <h4 className="text-xl font-medium text-gray-800 mb-2">
+                    {communityPot.currentInitiative.name}
+                  </h4>
+                  <p className="text-gray-600 mb-4">
+                    {communityPot.currentInitiative.description}
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-rose-600">
+                        £{communityPot.currentInitiative.raised.toFixed(2)} raised
+                      </span>
+                      <span className="text-gray-500">
+                        Goal: £{communityPot.currentInitiative.goal.toFixed(2)}
+                      </span>
+                    </div>
+                    <Progress
+                      value={(communityPot.currentInitiative.raised / communityPot.currentInitiative.goal) * 100}
+                      className="h-3 bg-rose-100"
+                    />
+                    <p className="text-xs text-rose-600 text-right">
+                      {Math.round((communityPot.currentInitiative.raised / communityPot.currentInitiative.goal) * 100)}% funded
+                    </p>
+                  </div>
+                </div>
+
+                {/* Past Initiatives */}
+                <div>
+                  <h3 className="font-semibold text-rose-800 mb-3">Previously Funded</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {communityPot.pastInitiatives.map((initiative, index) => (
+                      <div
+                        key={index}
+                        className="bg-white rounded-lg p-4 border border-rose-100"
+                      >
+                        <p className="font-medium text-gray-800">{initiative.name}</p>
+                        <p className="text-lg font-semibold text-rose-600">
+                          £{initiative.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-gray-500">{initiative.date}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Token Tiers */}
         <div className="mb-12">

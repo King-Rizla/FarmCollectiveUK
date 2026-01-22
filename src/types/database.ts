@@ -42,6 +42,7 @@ export interface Producer {
   rating: number;
   reviewCount: number;
   totalSales: number;
+  salesCount: number; // Number of completed (delivered) orders - used for Plant badge
   totalTokensGenerated: number;
   createdAt: Date;
   updatedAt: Date;
@@ -60,6 +61,8 @@ export type ProductCategory =
   | 'herbs'
   | 'specialty';
 
+export type ProductType = 'available' | 'growing';
+
 export interface Product {
   id: string;
   producerId: string;
@@ -75,6 +78,11 @@ export interface Product {
   stockQuantity: number;
   isAvailable: boolean;
   distance?: number; // Calculated field based on user location
+  // Growing/Pre-order fields
+  productType: ProductType;
+  readyDate?: Date; // When the product will be ready (for growing products)
+  totalShares?: number; // Total shares available for pre-order
+  reservedShares?: number; // Number of shares already reserved
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,6 +95,10 @@ export interface ProductFormData {
   category: ProductCategory;
   imageUrl: string;
   stockQuantity: number;
+  // Growing/Pre-order fields
+  productType?: ProductType;
+  readyDate?: Date;
+  totalShares?: number;
 }
 
 // ============================================
@@ -104,13 +116,16 @@ export interface CartItem {
   unit: string;
   quantity: number;
   addedAt: Date;
+  // Reservation fields (for growing products)
+  isReservation?: boolean;
+  readyDate?: Date;
 }
 
 // ============================================
 // ORDER TYPES
 // ============================================
 
-export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+export type OrderStatus = 'pending' | 'paid' | 'reserved' | 'shipped' | 'delivered' | 'cancelled';
 
 export interface OrderItem {
   productId: string;
@@ -120,6 +135,9 @@ export interface OrderItem {
   unit: string;
   producerId: string;
   producerName: string;
+  // Reservation fields
+  isReservation?: boolean;
+  readyDate?: Date;
 }
 
 export interface Order {

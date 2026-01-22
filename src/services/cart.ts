@@ -42,6 +42,8 @@ const docToCartItem = (doc: any): CartItem => {
     unit: data.unit,
     quantity: data.quantity,
     addedAt: data.addedAt?.toDate() || new Date(),
+    isReservation: data.isReservation || false,
+    readyDate: data.readyDate?.toDate(),
   };
 };
 
@@ -90,25 +92,43 @@ export const addToCart = async (
       };
     }
 
+    // Check if this is a growing product (reservation)
+    const isReservation = product.productType === 'growing';
+
     // Add new item to cart
-    const cartItemData = {
+    const cartItemData: any = {
       productId: product.id,
       productName: product.name,
       productImage: product.imageUrl,
       producerName: product.producerName,
       producerId: product.producerId,
       price: product.price,
-      unit: product.unit,
+      unit: isReservation ? 'share' : product.unit,
       quantity,
       addedAt: serverTimestamp(),
+      isReservation,
     };
+
+    // Add ready date for reservations
+    if (isReservation && product.readyDate) {
+      cartItemData.readyDate = product.readyDate;
+    }
 
     const docRef = await addDoc(cartRef, cartItemData);
 
     return {
       id: docRef.id,
-      ...cartItemData,
+      productId: product.id,
+      productName: product.name,
+      productImage: product.imageUrl,
+      producerName: product.producerName,
+      producerId: product.producerId,
+      price: product.price,
+      unit: isReservation ? 'share' : product.unit,
+      quantity,
       addedAt: new Date(),
+      isReservation,
+      readyDate: product.readyDate,
     };
   } catch (error) {
     console.error('Error adding to cart:', error);

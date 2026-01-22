@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
@@ -22,6 +22,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { getUserTokenInfo } from "@/services/tokens";
+import { TokenTier } from "@/types/database";
 
 // Define the props for the Navbar component
 interface NavbarProps {
@@ -30,15 +32,33 @@ interface NavbarProps {
   avatarUrl?: string;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ 
-  isLoggedIn: isLoggedInProp, 
-  username: usernameProp, 
-  avatarUrl: avatarUrlProp 
+const Navbar: React.FC<NavbarProps> = ({
+  isLoggedIn: isLoggedInProp,
+  username: usernameProp,
+  avatarUrl: avatarUrlProp
 }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState(0);
+  const [tokenTier, setTokenTier] = useState<TokenTier>("Bronze");
   const location = useLocation();
   const { session, profile, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Fetch token balance when user is logged in
+  useEffect(() => {
+    const fetchTokens = async () => {
+      if (session?.uid) {
+        try {
+          const tokenInfo = await getUserTokenInfo(session.uid);
+          setTokenBalance(tokenInfo.balance);
+          setTokenTier(tokenInfo.tier);
+        } catch (error) {
+          console.error("Error fetching token info:", error);
+        }
+      }
+    };
+    fetchTokens();
+  }, [session?.uid]);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -106,7 +126,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild><Link to="/favorites" className="w-full flex items-center"><Heart className="mr-2 h-4 w-4" /> Favorites</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/orders" className="w-full flex items-center"><ShoppingBasket className="mr-2 h-4 w-4" /> Orders</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild><Link to="/rewards" className="w-full flex items-center"><Coins className="mr-2 h-4 w-4" /> Tokens (520)</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link to="/rewards" className="w-full flex items-center"><Coins className="mr-2 h-4 w-4 text-amber-500" /> {tokenBalance} $FCUK</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/settings" className="w-full flex items-center"><Settings className="mr-2 h-4 w-4" /> Settings</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" /> Logout</DropdownMenuItem>

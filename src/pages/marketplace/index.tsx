@@ -24,9 +24,10 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { getAllProducts } from "@/services/products";
+import { getAllProducts, getGrowingProducts } from "@/services/products";
 import { calculatePurchaseTokens } from "@/services/tokens";
 import { Product, PRODUCT_CATEGORIES, ProductCategory } from "@/types/database";
+import { GrowingCard } from "@/components/marketplace/growing-card";
 
 // Categories with "all" option
 const categories = [
@@ -37,6 +38,7 @@ const categories = [
 // --- HOOK (Business Logic) ---
 const useMarketplaceLogic = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [growingProducts, setGrowingProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [maxDistance, setMaxDistance] = useState(50);
@@ -45,6 +47,7 @@ const useMarketplaceLogic = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"shop" | "growing">("shop");
 
   // Fetch products from Firestore
   useEffect(() => {
@@ -52,13 +55,26 @@ const useMarketplaceLogic = () => {
       setLoading(true);
       setError(null);
       try {
-        const fetchedProducts = await getAllProducts();
-        // Add mock distance for demo (would be calculated based on user location)
-        const productsWithDistance = fetchedProducts.map((p) => ({
+        const [fetchedProducts, fetchedGrowing] = await Promise.all([
+          getAllProducts(),
+          getGrowingProducts(),
+        ]);
+
+        // Filter out growing products from main list and add mock distance
+        const availableProducts = fetchedProducts
+          .filter((p) => p.productType !== "growing")
+          .map((p) => ({
+            ...p,
+            distance: Math.random() * 15 + 1, // Random 1-16 km for demo
+          }));
+
+        const growingWithDistance = fetchedGrowing.map((p) => ({
           ...p,
-          distance: Math.random() * 15 + 1, // Random 1-16 km for demo
+          distance: Math.random() * 15 + 1,
         }));
-        setProducts(productsWithDistance);
+
+        setProducts(availableProducts);
+        setGrowingProducts(growingWithDistance);
       } catch (err) {
         console.error("Error fetching products:", err);
         setError("Failed to load products. Please try again.");
@@ -101,6 +117,7 @@ const useMarketplaceLogic = () => {
 
   return {
     products,
+    growingProducts,
     loading,
     error,
     maxDistance,
@@ -110,6 +127,8 @@ const useMarketplaceLogic = () => {
     isModalOpen,
     searchQuery,
     filteredProducts,
+    activeTab,
+    setActiveTab,
     setMaxDistance,
     setSelectedCategory,
     setShowTokenDeals,
@@ -427,6 +446,9 @@ const Marketplace = () => {
     isModalOpen,
     searchQuery,
     filteredProducts,
+    growingProducts,
+    activeTab,
+    setActiveTab,
     setMaxDistance,
     setSelectedCategory,
     setShowTokenDeals,
@@ -436,7 +458,20 @@ const Marketplace = () => {
     resetFilters,
   } = useMarketplaceLogic();
 
-  const { itemCount } = useCart();
+  const { itemCount, addToCart } = useCart();
+  const { session } = useAuth();
+
+  const handleReserveShare = (product: Product) => {
+    if (!session) {
+      // Could redirect to signin
+      return;
+    }
+    // Add to cart as a reservation
+    addToCart({
+      ...product,
+      unit: "share",
+    }, 1);
+  };
 
   return (
     <div className="bg-white min-h-screen">
@@ -447,82 +482,122 @@ const Marketplace = () => {
           <h1 className="text-3xl md:text-4xl font-serif font-semibold text-green-800 mb-4">
             Local Marketplace
           </h1>
-          <p className="text-green-700 max-w-3xl">
+          <p className="text-green-700 max-w-3xl mb-6">
             Browse fresh, seasonal produce from local growers within your area.
             Support sustainable farming and enjoy the best quality food.
           </p>
-        </div>
 
-        {/* Filters Section */}
-        <div className="bg-green-50 rounded-xl p-6 mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-green-800 mb-2">
-                Search Products or Producers
-              </label>
-              <Input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white border-green-200"
-              />
-            </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-green-800 mb-2">
-                Category
-              </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full h-9 rounded-md border border-green-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-green-500"
-              >
-                {categories.map((category) => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-green-800 mb-2">
-                Maximum Distance: {maxDistance} km
-              </label>
-              <Slider
-                value={[maxDistance]}
-                min={5}
-                max={100}
-                step={5}
-                onValueChange={(value) => setMaxDistance(value[0])}
-                className="py-2"
-              />
-            </div>
-
-            <div className="flex items-center">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showTokenDeals}
-                  onChange={() => setShowTokenDeals(!showTokenDeals)}
-                  className="sr-only peer"
-                />
-                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                <span className="ml-3 text-sm font-medium text-green-800">
-                  Token Holder Deals
-                </span>
-              </label>
-            </div>
+          {/* Shop/Growing Tabs */}
+          <div className="flex gap-2">
+            <Button
+              variant={activeTab === "shop" ? "default" : "outline"}
+              onClick={() => setActiveTab("shop")}
+              className={cn(
+                activeTab === "shop"
+                  ? "bg-green-700 hover:bg-green-800"
+                  : "border-green-200 text-green-700 hover:bg-green-50"
+              )}
+            >
+              Shop Now ({filteredProducts.length})
+            </Button>
+            <Button
+              variant={activeTab === "growing" ? "default" : "outline"}
+              onClick={() => setActiveTab("growing")}
+              className={cn(
+                activeTab === "growing"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "border-amber-200 text-amber-700 hover:bg-amber-50"
+              )}
+            >
+              Coming Soon ({growingProducts.length})
+            </Button>
           </div>
         </div>
 
+        {/* Filters Section - Only show for Shop tab */}
+        {activeTab === "shop" && (
+          <div className="bg-green-50 rounded-xl p-6 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-green-800 mb-2">
+                  Search Products or Producers
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-white border-green-200"
+                />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-green-800 mb-2">
+                  Category
+                </label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full h-9 rounded-md border border-green-200 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-green-500"
+                >
+                  {categories.map((category) => (
+                    <option key={category.value} value={category.value}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-green-800 mb-2">
+                  Maximum Distance: {maxDistance} km
+                </label>
+                <Slider
+                  value={[maxDistance]}
+                  min={5}
+                  max={100}
+                  step={5}
+                  onValueChange={(value) => setMaxDistance(value[0])}
+                  className="py-2"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showTokenDeals}
+                    onChange={() => setShowTokenDeals(!showTokenDeals)}
+                    className="sr-only peer"
+                  />
+                  <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-green-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                  <span className="ml-3 text-sm font-medium text-green-800">
+                    Token Holder Deals
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Growing Tab Description */}
+        {activeTab === "growing" && (
+          <div className="bg-amber-50 rounded-xl p-6 mb-8 border border-amber-200">
+            <h2 className="text-lg font-semibold text-amber-800 mb-2">Pre-Order Your Share</h2>
+            <p className="text-amber-700">
+              Reserve shares of upcoming harvests! Pay upfront to secure your produce and
+              help local farmers plan their growing season. You'll be notified when your
+              order is ready for pickup or delivery.
+            </p>
+          </div>
+        )}
+
         {/* Results Count */}
         <div className="mb-6 flex justify-between items-center">
-          <p className="text-green-700">
+          <p className={activeTab === "shop" ? "text-green-700" : "text-amber-700"}>
             {loading ? (
               "Loading products..."
-            ) : (
+            ) : activeTab === "shop" ? (
               <>
                 Showing{" "}
                 <span className="font-medium">{filteredProducts.length}</span>{" "}
@@ -533,6 +608,11 @@ const Marketplace = () => {
                     matching <span className="font-medium">"{searchQuery}"</span>
                   </>
                 )}
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{growingProducts.length}</span>{" "}
+                upcoming harvests available for pre-order
               </>
             )}
           </p>
@@ -546,16 +626,18 @@ const Marketplace = () => {
                 </Button>
               </Link>
             )}
-            <div className="flex items-center">
-              <Filter className="h-5 w-5 text-green-700 mr-2" />
-              <span className="text-green-700">Sort by: </span>
-              <select className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none">
-                <option>Distance</option>
-                <option>Price: Low to High</option>
-                <option>Price: High to Low</option>
-                <option>Rating</option>
-              </select>
-            </div>
+            {activeTab === "shop" && (
+              <div className="flex items-center">
+                <Filter className="h-5 w-5 text-green-700 mr-2" />
+                <span className="text-green-700">Sort by: </span>
+                <select className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none">
+                  <option>Distance</option>
+                  <option>Price: Low to High</option>
+                  <option>Price: High to Low</option>
+                  <option>Rating</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -581,8 +663,8 @@ const Marketplace = () => {
           </div>
         )}
 
-        {/* Products Grid */}
-        {!loading && !error && filteredProducts.length > 0 && (
+        {/* Shop Products Grid */}
+        {!loading && !error && activeTab === "shop" && filteredProducts.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
               <ProductCard
@@ -594,8 +676,21 @@ const Marketplace = () => {
           </div>
         )}
 
-        {/* Empty State */}
-        {!loading && !error && filteredProducts.length === 0 && (
+        {/* Growing Products Grid */}
+        {!loading && !error && activeTab === "growing" && growingProducts.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {growingProducts.map((product) => (
+              <GrowingCard
+                key={product.id}
+                product={product}
+                onReserve={handleReserveShare}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Empty State - Shop Tab */}
+        {!loading && !error && activeTab === "shop" && filteredProducts.length === 0 && (
           <div className="text-center py-12">
             <p className="text-lg text-green-800 mb-4">
               No products found matching your criteria
@@ -611,6 +706,23 @@ const Marketplace = () => {
               className="bg-green-700 hover:bg-green-800 text-white"
             >
               Reset Filters
+            </Button>
+          </div>
+        )}
+
+        {/* Empty State - Growing Tab */}
+        {!loading && !error && activeTab === "growing" && growingProducts.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">🌱</div>
+            <p className="text-lg text-amber-800 mb-2">No upcoming harvests yet</p>
+            <p className="text-amber-600 mb-4">
+              Check back soon! Local producers are always planning new crops.
+            </p>
+            <Button
+              onClick={() => setActiveTab("shop")}
+              className="bg-green-700 hover:bg-green-800 text-white"
+            >
+              Browse Available Products
             </Button>
           </div>
         )}

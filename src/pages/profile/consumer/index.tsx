@@ -12,6 +12,8 @@ import {
   Coins,
   ChevronRight,
   Edit,
+  Loader2,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import {
@@ -37,6 +40,9 @@ import { Label } from "@/components/ui/label";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { getCustomerOrders } from "@/services/orders";
+import { getUserTokenInfo, getNextTierProgress } from "@/services/tokens";
+import { Order, TokenTier } from "@/types/database";
 
 // Mock data
 const defaultUserData = {
@@ -162,25 +168,84 @@ const ConsumerProfile = () => {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [location, setLocation] = useState("");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [tokenInfo, setTokenInfo] = useState<{ balance: number; tier: TokenTier }>({
+    balance: 0,
+    tier: "Bronze",
+  });
+  const [tierProgress, setTierProgress] = useState<{
+    nextTier: TokenTier | null;
+    tokensNeeded: number;
+    progress: number;
+  }>({ nextTier: "Silver", tokensNeeded: 100, progress: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const dbData = userDoc.data();
+        setLoading(true);
+        const authName = user.displayName || user.email?.split("@")[0] || "User";
+
+        // Fetch user doc and tokens first (critical)
+        try {
+          const [userDocSnap, tokenData] = await Promise.all([
+            getDoc(doc(db, "users", user.uid)),
+            getUserTokenInfo(user.uid),
+          ]);
+
+          if (userDocSnap.exists()) {
+            const dbData = userDocSnap.data();
+            const resolvedName = dbData.displayName || dbData.full_name || authName;
+            const resolvedLocation = dbData.location || "";
+
+            setUserData((prevData) => ({
+              ...prevData,
+              name: resolvedName,
+              location: resolvedLocation,
+              tokenBalance: tokenData.balance,
+              tokenTier: tokenData.tier,
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${resolvedName}`,
+            }));
+            setDisplayName(resolvedName);
+            setLocation(resolvedLocation);
+          } else {
+            setUserData((prevData) => ({
+              ...prevData,
+              name: authName,
+              location: "",
+              tokenBalance: tokenData.balance,
+              tokenTier: tokenData.tier,
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${authName}`,
+            }));
+            setDisplayName(authName);
+            setLocation("");
+          }
+
+          setTokenInfo(tokenData);
+          setTierProgress(getNextTierProgress(tokenData.balance));
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          // Still set basic data from auth
           setUserData((prevData) => ({
             ...prevData,
-            name: dbData.displayName || prevData.name,
-            location: dbData.location || prevData.location,
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${
-              dbData.displayName || prevData.name
-            }`,
+            name: authName,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${authName}`,
           }));
-          setDisplayName(dbData.displayName || defaultUserData.name);
-          setLocation(dbData.location || defaultUserData.location);
+          setDisplayName(authName);
         }
+
+        // Fetch orders separately (non-blocking)
+        try {
+          const ordersData = await getCustomerOrders(user.uid);
+          setOrders(ordersData);
+        } catch (error) {
+          console.error("Error fetching orders:", error);
+          // Orders will remain empty - that's OK
+        }
+
+        setLoading(false);
+      } else {
+        setLoading(false);
       }
     });
     return () => unsubscribe();
@@ -320,81 +385,74 @@ const ConsumerProfile = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {recentPurchases.map((purchase) => (
-                    <div key={purchase.id} className="flex items-start gap-4">
-                      <div className="w-20 h-20 rounded-md overflow-hidden bg-green-50 flex-shrink-0">
-                        <img
-                          src={purchase.image}
-                          alt={purchase.name}
-                          className="w-full h-full object-cover"
-                        />
+                {loading ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex gap-4">
+                        <Skeleton className="w-20 h-20 rounded-md" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-5 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-4 w-1/4" />
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <h3 className="font-medium text-green-800">
-                            {purchase.name}
-                          </h3>
-                          <span className="font-medium text-green-800">
-                            £{purchase.price.toFixed(2)}
-                          </span>
+                    ))}
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                    <p className="text-gray-600">No orders yet</p>
+                    <Link to="/marketplace">
+                      <Button className="mt-4 bg-green-700 hover:bg-green-800">
+                        Browse Marketplace
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {orders.slice(0, 3).map((order) => (
+                      <div key={order.id} className="flex items-start gap-4">
+                        <div className="w-20 h-20 rounded-md overflow-hidden bg-green-50 flex-shrink-0 flex items-center justify-center">
+                          <ShoppingBag className="h-8 w-8 text-green-600" />
                         </div>
-                        <div className="flex items-center mt-1">
-                          <Avatar className="h-5 w-5 mr-1">
-                            <AvatarImage src={purchase.producerAvatar} />
-                            <AvatarFallback>
-                              {purchase.producer[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm text-green-600">
-                            {purchase.producer}
-                          </span>
-                          <span className="mx-2 text-green-600">•</span>
-                          <span className="text-sm text-green-600">
-                            {purchase.date}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center mt-2">
-                          <div>
-                            {purchase.hasReviewed ? (
-                              <div className="flex items-center">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={cn(
-                                      "h-4 w-4",
-                                      i < purchase.rating
-                                        ? "text-amber-500 fill-current"
-                                        : "text-gray-300",
-                                    )}
-                                  />
-                                ))}
-                                <span className="ml-2 text-sm text-green-600">
-                                  Reviewed
-                                </span>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-amber-600 border-amber-300 hover:bg-amber-50"
-                              >
-                                <Star className="h-3 w-3 mr-1" /> Leave Review
-                              </Button>
-                            )}
+                        <div className="flex-1">
+                          <div className="flex justify-between">
+                            <h3 className="font-medium text-green-800">
+                              Order #{order.id.slice(0, 8)}
+                            </h3>
+                            <span className="font-medium text-green-800">
+                              £{order.total.toFixed(2)}
+                            </span>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-green-700"
-                          >
-                            <ShoppingBag className="h-3 w-3 mr-1" /> Buy Again
-                          </Button>
+                          <div className="flex items-center mt-1">
+                            <span className="text-sm text-green-600">
+                              {order.items.length} item{order.items.length !== 1 ? 's' : ''}
+                            </span>
+                            <span className="mx-2 text-green-600">•</span>
+                            <span className="text-sm text-green-600">
+                              {new Date(order.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-2">
+                            <Badge
+                              className={cn(
+                                order.status === "paid" && "bg-yellow-100 text-yellow-800",
+                                order.status === "shipped" && "bg-blue-100 text-blue-800",
+                                order.status === "delivered" && "bg-green-100 text-green-800",
+                                order.status === "cancelled" && "bg-red-100 text-red-800"
+                              )}
+                            >
+                              {order.status}
+                            </Badge>
+                            <span className="text-sm text-amber-600">
+                              +{order.tokensEarned} $FCUK
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -554,8 +612,14 @@ const ConsumerProfile = () => {
                   </div>
                   <div>
                     <div className="flex items-center">
-                      <Badge className="bg-slate-400 text-white font-medium">
-                        {userData.tokenTier} Tier
+                      <Badge className={cn(
+                        "font-medium",
+                        tokenInfo.tier === "Bronze" && "bg-amber-600 text-white",
+                        tokenInfo.tier === "Silver" && "bg-slate-400 text-white",
+                        tokenInfo.tier === "Gold" && "bg-yellow-500 text-white",
+                        tokenInfo.tier === "Platinum" && "bg-purple-600 text-white"
+                      )}>
+                        {tokenInfo.tier} Tier
                       </Badge>
                       <Link
                         to="/rewards"
@@ -567,7 +631,7 @@ const ConsumerProfile = () => {
                     <div className="flex items-center mt-1">
                       <Coins className="h-4 w-4 text-amber-500 mr-1" />
                       <span className="font-medium text-green-800">
-                        {userData.tokenBalance} $FCUK
+                        {tokenInfo.balance} $FCUK
                       </span>
                     </div>
                   </div>
@@ -577,18 +641,22 @@ const ConsumerProfile = () => {
                   <div>
                     <div className="flex justify-between items-center mb-1 text-sm">
                       <span className="text-green-700">
-                        Progress to Gold Tier
+                        {tierProgress.nextTier
+                          ? `Progress to ${tierProgress.nextTier} Tier`
+                          : "Maximum Tier Achieved!"}
                       </span>
                       <span className="text-green-800 font-medium">
-                        {userData.tokenBalance}/1000
+                        {tokenInfo.balance} $FCUK
                       </span>
                     </div>
                     <Progress
-                      value={(userData.tokenBalance / 1000) * 100}
+                      value={tierProgress.progress}
                       className="h-2 bg-amber-100"
                     />
                     <p className="text-xs text-green-600 mt-1">
-                      480 more tokens needed
+                      {tierProgress.nextTier
+                        ? `${tierProgress.tokensNeeded} more tokens to ${tierProgress.nextTier}`
+                        : "You've reached the highest tier!"}
                     </p>
                   </div>
 

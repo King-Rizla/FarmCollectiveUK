@@ -25,7 +25,7 @@ import {
   CartItem,
 } from '@/types/database';
 import { clearCart } from './cart';
-import { updateProductStock } from './products';
+import { updateProductStock, reserveProductShares } from './products';
 import { awardPurchaseTokens, awardSaleTokens } from './tokens';
 
 const ORDERS_COLLECTION = 'orders';
@@ -69,38 +69,64 @@ export const createOrder = async (
   stripePaymentId?: string
 ): Promise<Order> => {
   try {
-    // Convert cart items to order items
-    const orderItems: OrderItem[] = cartItems.map((item) => ({
-      productId: item.productId,
-      name: item.productName,
-      price: item.price,
-      quantity: item.quantity,
-      unit: item.unit,
-      producerId: item.producerId,
-      producerName: item.producerName,
-    }));
+    // Check if any items are reservations
+    const hasReservations = cartItems.some((item) => item.isReservation);
 
-    const orderData = {
+    // Convert cart items to order items (filter out undefined values for Firestore)
+    const orderItems: OrderItem[] = cartItems.map((item) => {
+      const orderItem: any = {
+        productId: item.productId,
+        name: item.productName,
+        price: item.price,
+        quantity: item.quantity,
+        unit: item.unit,
+        producerId: item.producerId,
+        producerName: item.producerName,
+      };
+      // Only add reservation fields if they exist (Firestore doesn't allow undefined)
+      if (item.isReservation) {
+        orderItem.isReservation = true;
+      }
+      if (item.readyDate) {
+        orderItem.readyDate = item.readyDate;
+      }
+      return orderItem as OrderItem;
+    });
+
+    // Set status based on whether there are reservations
+    const initialStatus: OrderStatus = hasReservations ? 'reserved' : 'paid';
+
+    const orderData: any = {
       customerId,
       customerEmail,
       customerName,
-      status: 'paid' as OrderStatus,
+      status: initialStatus,
       items: orderItems,
       subtotal,
       shipping,
       total,
       tokensEarned,
-      stripePaymentId,
       deliveryAddress,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
 
+    // Only add stripePaymentId if it exists (Firestore doesn't allow undefined)
+    if (stripePaymentId) {
+      orderData.stripePaymentId = stripePaymentId;
+    }
+
     const docRef = await addDoc(collection(db, ORDERS_COLLECTION), orderData);
 
-    // Update product stock for each item
+    // Update product stock or reserve shares for each item
     for (const item of cartItems) {
-      await updateProductStock(item.productId, -item.quantity);
+      if (item.isReservation) {
+        // Reserve shares for growing products
+        await reserveProductShares(item.productId, item.quantity);
+      } else {
+        // Decrease stock for regular products
+        await updateProductStock(item.productId, -item.quantity);
+      }
     }
 
     // Award tokens to customer
@@ -125,7 +151,7 @@ export const createOrder = async (
       customerId,
       customerEmail,
       customerName,
-      status: 'paid',
+      status: initialStatus,
       items: orderItems,
       subtotal,
       shipping,
@@ -204,6 +230,7 @@ export const getProducerOrders = async (producerId: string): Promise<Order[]> =>
 
 /**
  * Update order status
+ * When status changes to "delivered", increment salesCount for each producer
  */
 export const updateOrderStatus = async (
   orderId: string,
@@ -211,6 +238,34 @@ export const updateOrderStatus = async (
 ): Promise<void> => {
   try {
     const docRef = doc(db, ORDERS_COLLECTION, orderId);
+
+    // If marking as delivered, get the order first to increment producer salesCount
+    if (status === 'delivered') {
+      const orderSnap = await getDoc(docRef);
+      if (orderSnap.exists()) {
+        const orderData = orderSnap.data();
+        const previousStatus = orderData.status;
+
+        // Only increment if not already delivered (prevent double counting)
+        if (previousStatus !== 'delivered') {
+          // Get unique producer IDs from the order
+          const producerIds = [...new Set(orderData.items.map((item: any) => item.producerId))];
+
+          // Increment salesCount for each producer
+          for (const producerId of producerIds) {
+            const producerRef = doc(db, 'users', producerId);
+            const producerSnap = await getDoc(producerRef);
+            if (producerSnap.exists()) {
+              const currentSalesCount = producerSnap.data().salesCount || 0;
+              await updateDoc(producerRef, {
+                salesCount: currentSalesCount + 1,
+              });
+            }
+          }
+        }
+      }
+    }
+
     await updateDoc(docRef, {
       status,
       updatedAt: serverTimestamp(),

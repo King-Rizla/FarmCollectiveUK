@@ -27,6 +27,7 @@ const NotFound = lazy(() => import("./pages/404"));
 const AdminSeed = lazy(() => import("./pages/admin/seed"));
 const ActivateProducer = lazy(() => import("./pages/admin/activate-producer"));
 const ClaimProducts = lazy(() => import("./pages/admin/claim-products"));
+const OrderHistory = lazy(() => import("./pages/orders"));
 
 // Loading component for Suspense fallback
 const Loading = () => (
@@ -143,6 +144,14 @@ function App() {
             element={
               <Suspense fallback={<Loading />}>
                 <OrderConfirmation />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <Suspense fallback={<Loading />}>
+                <OrderHistory />
               </Suspense>
             }
           />
