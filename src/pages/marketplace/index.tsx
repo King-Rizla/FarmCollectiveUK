@@ -48,6 +48,7 @@ const useMarketplaceLogic = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"shop" | "growing">("shop");
+  const [sortBy, setSortBy] = useState<"distance" | "price-low" | "price-high" | "rating">("distance");
 
   // Fetch products from Firestore
   useEffect(() => {
@@ -87,7 +88,7 @@ const useMarketplaceLogic = () => {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+    const filtered = products.filter((product) => {
       const matchesDistance = (product.distance || 0) <= maxDistance;
       const matchesCategory =
         selectedCategory === "all" || product.category === selectedCategory;
@@ -97,7 +98,23 @@ const useMarketplaceLogic = () => {
         product.producerName.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesDistance && matchesCategory && matchesSearch;
     });
-  }, [products, maxDistance, selectedCategory, searchQuery]);
+
+    // Sort based on sortBy selection
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "distance":
+          return (a.distance || 0) - (b.distance || 0);
+        case "price-low":
+          return a.price - b.price;
+        case "price-high":
+          return b.price - a.price;
+        case "rating":
+          return (b.producerRating || 0) - (a.producerRating || 0);
+        default:
+          return 0;
+      }
+    });
+  }, [products, maxDistance, selectedCategory, searchQuery, sortBy]);
 
   const handleProductClick = (product: Product) => {
     setSelectedProduct(product);
@@ -128,7 +145,9 @@ const useMarketplaceLogic = () => {
     searchQuery,
     filteredProducts,
     activeTab,
+    sortBy,
     setActiveTab,
+    setSortBy,
     setMaxDistance,
     setSelectedCategory,
     setShowTokenDeals,
@@ -448,7 +467,9 @@ const Marketplace = () => {
     filteredProducts,
     growingProducts,
     activeTab,
+    sortBy,
     setActiveTab,
+    setSortBy,
     setMaxDistance,
     setSelectedCategory,
     setShowTokenDeals,
@@ -630,11 +651,15 @@ const Marketplace = () => {
               <div className="flex items-center">
                 <Filter className="h-5 w-5 text-green-700 mr-2" />
                 <span className="text-green-700">Sort by: </span>
-                <select className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none">
-                  <option>Distance</option>
-                  <option>Price: Low to High</option>
-                  <option>Price: High to Low</option>
-                  <option>Rating</option>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "distance" | "price-low" | "price-high" | "rating")}
+                  className="ml-2 bg-transparent text-green-800 font-medium focus:outline-none cursor-pointer"
+                >
+                  <option value="distance">Distance</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="rating">Rating</option>
                 </select>
               </div>
             )}

@@ -15,6 +15,7 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import { Order, OrderStatus } from "@/types/database";
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType; color: string; bgColor: string }> = {
   pending: { icon: Clock, color: "text-gray-600", bgColor: "bg-gray-100" },
+  reserved: { icon: CalendarClock, color: "text-amber-700", bgColor: "bg-amber-100" },
   paid: { icon: ShoppingBag, color: "text-yellow-700", bgColor: "bg-yellow-100" },
   shipped: { icon: Truck, color: "text-blue-700", bgColor: "bg-blue-100" },
   delivered: { icon: CheckCircle, color: "text-green-700", bgColor: "bg-green-100" },

@@ -1,6 +1,6 @@
 
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Search, Star, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,17 @@ import { useHomePage } from "@/hooks/useHomePage";
 
 const HomePage: React.FC = () => {
   const { featuredProducers, featuredProducts } = useHomePage();
+  const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/marketplace?search=${encodeURIComponent(searchQuery.trim())}`);
+    } else {
+      navigate("/marketplace");
+    }
+  };
 
   return (
     <div className="bg-white text-green-800">
@@ -26,17 +37,22 @@ const HomePage: React.FC = () => {
             Discover and support local producers. Enjoy fresh, seasonal, and
             sustainably sourced food while strengthening your community.
           </p>
-          <div className="max-w-2xl mx-auto relative">
+          <form onSubmit={handleSearch} className="max-w-2xl mx-auto relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search for producers, products, or locations..."
               className="w-full pl-12 pr-32 py-4 rounded-full border border-green-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
             />
-            <Button className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-6 py-2 bg-green-700 hover:bg-green-800 text-white">
+            <Button
+              type="submit"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-6 py-2 bg-green-700 hover:bg-green-800 text-white"
+            >
               Search
             </Button>
-          </div>
+          </form>
         </div>
       </section>
 
@@ -92,14 +108,6 @@ const HomePage: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-serif font-semibold text-green-800">
               Featured Producers
             </h2>
-            <Link to="/producers">
-              <Button
-                variant="ghost"
-                className="text-green-700 hover:text-green-900"
-              >
-                View All <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuredProducers.map((producer) => (
@@ -152,7 +160,7 @@ const HomePage: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-serif font-semibold text-green-800">
               Popular This Week
             </h2>
-            <Link to="/market">
+            <Link to="/marketplace">
               <Button
                 variant="ghost"
                 className="text-green-700 hover:text-green-900"
@@ -164,7 +172,7 @@ const HomePage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {featuredProducts.map((product) => (
               <Card key={product.id} className="overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300">
-                <div className="aspect-w-1 aspect-h-1 w-full overflow-hidden">
+                <div className="h-48 w-full overflow-hidden bg-green-50">
                   <img
                     src={product.image}
                     alt={product.name}
@@ -187,9 +195,11 @@ const HomePage: React.FC = () => {
                       <span>{product.rating}</span>
                     </div>
                   </div>
-                  <Button className="w-full mt-4 bg-green-700 hover:bg-green-800 text-white">
-                    Add to Cart
-                  </Button>
+                  <Link to="/marketplace">
+                    <Button className="w-full mt-4 bg-green-700 hover:bg-green-800 text-white">
+                      View in Marketplace
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             ))}

@@ -5,7 +5,6 @@ import {
   ShoppingBasket,
   User,
   Coins,
-  Heart,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -93,11 +92,8 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden md:flex items-center space-x-6">
           <Link to="/" className={cn("font-medium transition-colors", isActive("/") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Home</Link>
           <Link to="/marketplace" className={cn("font-medium transition-colors", isActive("/marketplace") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Marketplace</Link>
-          <Link to="/social" className={cn("font-medium transition-colors", isActive("/social") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Social Feed</Link>
           <Link to="/about" className={cn("font-medium transition-colors", isActive("/about") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>About</Link>
-          <Link to="/grower" className={cn("font-medium transition-colors", isActive("/grower") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Join as Grower</Link>
-          <Link to="/faq" className={cn("font-medium transition-colors", isActive("/faq") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>FAQ</Link>
-          <Link to="/contact" className={cn("font-medium transition-colors", isActive("/contact") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Contact</Link>
+          <Link to="/grower" className={cn("font-medium transition-colors", isActive("/grower") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Join the Collective</Link>
         </div>
 
         <div className="hidden md:flex items-center space-x-4">
@@ -124,7 +120,6 @@ const Navbar: React.FC<NavbarProps> = ({
                   <DropdownMenuItem asChild><Link to="/profile/consumer" className="w-full flex items-center"><User className="mr-2 h-4 w-4" /> View Consumer Profile</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/profile/producer" className="w-full flex items-center"><User className="mr-2 h-4 w-4" /> View Producer Profile</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild><Link to="/favorites" className="w-full flex items-center"><Heart className="mr-2 h-4 w-4" /> Favorites</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/orders" className="w-full flex items-center"><ShoppingBasket className="mr-2 h-4 w-4" /> Orders</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/rewards" className="w-full flex items-center"><Coins className="mr-2 h-4 w-4 text-amber-500" /> {tokenBalance} $FCUK</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link to="/settings" className="w-full flex items-center"><Settings className="mr-2 h-4 w-4" /> Settings</Link></DropdownMenuItem>
@@ -154,11 +149,8 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="container px-4 py-4 mx-auto space-y-4">
           <Link to="/" className={cn("block py-2 font-medium", isActive("/") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Home</Link>
           <Link to="/marketplace" className={cn("block py-2 font-medium", isActive("/marketplace") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Marketplace</Link>
-          <Link to="/social" className={cn("block py-2 font-medium", isActive("/social") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Social Feed</Link>
           <Link to="/about" className={cn("block py-2 font-medium", isActive("/about") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>About</Link>
-          <Link to="/grower" className={cn("block py-2 font-medium", isActive("/grower") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Join as Grower</Link>
-          <Link to="/faq" className={cn("block py-2 font-medium", isActive("/faq") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>FAQ</Link>
-          <Link to="/contact" className={cn("block py-2 font-medium", isActive("/contact") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Contact</Link>
+          <Link to="/grower" className={cn("block py-2 font-medium", isActive("/grower") ? "text-amber-600" : "text-green-800 hover:text-amber-600")}>Join the Collective</Link>
           {isLoggedIn ? (
             <div className="pt-4 border-t border-amber-100 space-y-3">
               <Link to="/profile/consumer" className="block py-2 text-green-800 hover:text-amber-600">Consumer Profile</Link>

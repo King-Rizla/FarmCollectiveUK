@@ -168,6 +168,7 @@ const ProducerProfile = () => {
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchValue, setSearchValue] = useState("");
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [updatingOrderStatus, setUpdatingOrderStatus] = useState<string | null>(null);
@@ -659,71 +660,84 @@ const ProducerProfile = () => {
                         )}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredProducts.map((product) => (
-                          <Card
-                            key={product.id}
-                            className="overflow-hidden border-green-100 hover:border-green-200 transition-all"
-                          >
-                            <div className="relative aspect-video overflow-hidden bg-green-50">
-                              <img
-                                src={product.imageUrl}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute top-2 right-2 flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 bg-white/80 backdrop-blur-sm hover:bg-white"
-                                  onClick={() => handleEditProduct(product)}
-                                >
-                                  <Edit className="h-4 w-4 text-green-700" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 bg-white/80 backdrop-blur-sm hover:bg-white hover:text-red-600"
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                  disabled={deleting === product.id}
-                                >
-                                  {deleting === product.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4 text-green-700" />
-                                  )}
-                                </Button>
-                              </div>
-                              {!product.isAvailable && (
-                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                  <span className="text-white font-medium">
-                                    Out of Stock
-                                  </span>
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(showAllProducts ? filteredProducts : filteredProducts.slice(0, 4)).map((product) => (
+                            <Card
+                              key={product.id}
+                              className="overflow-hidden border-green-100 hover:border-green-200 transition-all"
+                            >
+                              <div className="relative aspect-video overflow-hidden bg-green-50">
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute top-2 right-2 flex gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 bg-white/80 backdrop-blur-sm hover:bg-white"
+                                    onClick={() => handleEditProduct(product)}
+                                  >
+                                    <Edit className="h-4 w-4 text-green-700" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 bg-white/80 backdrop-blur-sm hover:bg-white hover:text-red-600"
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    disabled={deleting === product.id}
+                                  >
+                                    {deleting === product.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4 text-green-700" />
+                                    )}
+                                  </Button>
                                 </div>
-                              )}
-                            </div>
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                <h3 className="font-medium text-green-800">
-                                  {product.name}
-                                </h3>
-                                <Badge
-                                  variant="outline"
-                                  className="bg-amber-50 text-amber-700 border-amber-200"
-                                >
-                                  {product.price.toFixed(2)} / {product.unit}
-                                </Badge>
+                                {!product.isAvailable && (
+                                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <span className="text-white font-medium">
+                                      Out of Stock
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-sm text-green-600 mb-1">
-                                Stock: {product.stockQuantity} {product.unit}s
-                              </p>
-                              <p className="text-sm text-gray-600 line-clamp-2">
-                                {product.description}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
+                              <CardContent className="p-4">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h3 className="font-medium text-green-800">
+                                    {product.name}
+                                  </h3>
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-amber-50 text-amber-700 border-amber-200"
+                                  >
+                                    {product.price.toFixed(2)} / {product.unit}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-green-600 mb-1">
+                                  Stock: {product.stockQuantity} {product.unit}s
+                                </p>
+                                <p className="text-sm text-gray-600 line-clamp-2">
+                                  {product.description}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                        {filteredProducts.length > 4 && (
+                          <Button
+                            variant="outline"
+                            className="w-full mt-4 border-green-200 text-green-700 hover:bg-green-50"
+                            onClick={() => setShowAllProducts(!showAllProducts)}
+                          >
+                            {showAllProducts
+                              ? `Show Less`
+                              : `View All ${filteredProducts.length} Products`}
+                          </Button>
+                        )}
+                      </>
                     )}
                   </CardContent>
                   <CardFooter className="pt-0">

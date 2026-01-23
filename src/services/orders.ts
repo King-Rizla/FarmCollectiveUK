@@ -249,11 +249,11 @@ export const updateOrderStatus = async (
         // Only increment if not already delivered (prevent double counting)
         if (previousStatus !== 'delivered') {
           // Get unique producer IDs from the order
-          const producerIds = [...new Set(orderData.items.map((item: any) => item.producerId))];
+          const producerIds = [...new Set(orderData.items.map((item: any) => item.producerId as string))];
 
           // Increment salesCount for each producer
           for (const producerId of producerIds) {
-            const producerRef = doc(db, 'users', producerId);
+            const producerRef = doc(db, 'users', producerId as string);
             const producerSnap = await getDoc(producerRef);
             if (producerSnap.exists()) {
               const currentSalesCount = producerSnap.data().salesCount || 0;
